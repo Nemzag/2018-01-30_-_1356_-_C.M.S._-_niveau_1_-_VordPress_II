@@ -9,6 +9,9 @@
 
 namespace pQuery;
 
+if (!defined('ABSPATH')) exit;
+
+
 /**
  * Indents text
  * @param string $text

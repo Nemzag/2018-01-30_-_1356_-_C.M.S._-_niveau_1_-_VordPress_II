@@ -18,6 +18,9 @@
 
 namespace Html2Text;
 
+if (!defined('ABSPATH')) exit;
+
+
 class Html2TextException extends \Exception {
 	var $more_info;
 

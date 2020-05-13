@@ -4,7 +4,7 @@ class EM_Event_Posts_Admin{
 		global $pagenow;
 		if( $pagenow == 'edit.php' && !empty($_REQUEST['post_type']) && $_REQUEST['post_type'] == EM_POST_TYPE_EVENT ){ //only needed for events list
 			if( !empty($_REQUEST['category_id']) && is_numeric($_REQUEST['category_id']) ){
-				$term = get_term_by('id', $_REQUEST['category_id'], EM_TAXONOMY_CATEGORY);
+				$term = get_term_by('id', absint($_REQUEST['category_id']), EM_TAXONOMY_CATEGORY);
 				if( !empty($term->slug) ){
 					$_REQUEST['category_id'] = $term->slug;
 				}
@@ -22,9 +22,6 @@ class EM_Event_Posts_Admin{
 			$row_action_type = is_post_type_hierarchical( EM_POST_TYPE_EVENT ) ? 'page_row_actions' : 'post_row_actions';
 			add_filter($row_action_type, array('EM_Event_Posts_Admin','row_actions'),10,2);
 			add_action('admin_head', array('EM_Event_Posts_Admin','admin_head'));
-			
-			if( empty($_GET['orderby']) ) $_GET['orderby'] = 'date-time';
-			if( empty($_GET['order']) ) $_GET['order'] = 'asc';
 		}
 		//collumns
 		add_filter('manage_edit-'.EM_POST_TYPE_EVENT.'_columns' , array('EM_Event_Posts_Admin','columns_add'));
@@ -66,9 +63,9 @@ class EM_Event_Posts_Admin{
 	
     public static function admin_notices(){
         if( !empty($_REQUEST['recurrence_id']) && is_numeric($_REQUEST['recurrence_id']) ){
-            $EM_Event = em_get_event($_REQUEST['recurrence_id']);
+            $EM_Event = em_get_event( absint($_REQUEST['recurrence_id']) );
             ?>
-            <div class="updated">
+            <div class="notice notice-info">
                 <p><?php echo sprintf(esc_html__('You are viewing individual recurrences of recurring event %s.', 'events-manager'), '<a href="'.$EM_Event->get_edit_url().'">'.$EM_Event->event_name.'</a>'); ?></p>
                 <p><?php esc_html_e('You can edit individual recurrences and disassociate them with this recurring event.', 'events-manager'); ?></p>
             </div>
@@ -212,28 +209,31 @@ class EM_Event_Posts_Admin{
 				//get meta value to see if post has location, otherwise
 				$EM_Location = $EM_Event->get_location();
 				if( !empty($EM_Location->location_id) ){
-					echo "<strong><a href='". $EM_Location->get_permalink()."'>" . $EM_Location->location_name . "</a></strong> 
-						<span class='row-actions'> - 
-							<a href='". esc_url($EM_Location->get_edit_url())."'>". esc_html__('Edit') ."</a> | 
-							<a href='". esc_url($EM_Location->get_permalink())."'>". esc_html__('View') ."</a>
-						</span>
-						<br/>" . $EM_Location->location_address . " - " . $EM_Location->location_town;
+					$actions = array();
+					$actions[] = "<a href='". esc_url($EM_Location->get_permalink())."'>". esc_html__('View') ."</a>";
+					if( $EM_Location->can_manage('edit_locations', 'edit_others_locations') ) {
+						$actions[] = "<a href='". esc_url($EM_Location->get_edit_url())."'>". esc_html__('Edit') ."</a>";
+					}
+					echo "<strong><a href='". $EM_Location->get_permalink()."'>" . $EM_Location->location_name . "</a></strong>";
+					echo "<span class='row-actions'> - ". implode(' | ', $actions) . "</span>";
+					echo "<br/>" . $EM_Location->location_address . " - " . $EM_Location->location_town;
 				}else{
 					echo __('None','events-manager');
 				}
 				break;
 			case 'date-time':
 				//get meta value to see if post has location, otherwise
-				$localised_start_date = date_i18n(get_option('date_format'), $EM_Event->start);
-				$localised_end_date = date_i18n(get_option('date_format'), $EM_Event->end);
+				$localised_start_date = $EM_Event->start()->i18n(get_option('date_format'));
+				$localised_end_date = $EM_Event->end()->i18n(get_option('date_format'));
 				echo $localised_start_date;
 				echo ($localised_end_date != $localised_start_date) ? " - $localised_end_date":'';
 				echo "<br />";
 				if(!$EM_Event->event_all_day){
-					echo date_i18n(get_option('time_format'), $EM_Event->start) . " - " . date_i18n(get_option('time_format'), $EM_Event->end);
+					echo $EM_Event->start()->i18n(get_option('time_format')) . " - " . $EM_Event->end()->i18n(get_option('time_format'));
 				}else{
 					echo get_option('dbem_event_all_day_message');
 				}
+				if( $EM_Event->get_timezone()->getName() != EM_DateTimeZone::create()->getName() ) echo '<span class="dashicons dashicons-info" style="font-size:16px; color:#ccc; padding-top:2px;" title="'.esc_attr(str_replace('_', ' ', $EM_Event->event_timezone)).'"></span>';
 				break;
 			case 'extra':
 				if( get_option('dbem_rsvp_enabled') == 1 && !empty($EM_Event->event_rsvp) && $EM_Event->can_manage('manage_bookings','manage_others_bookings')){
@@ -245,16 +245,25 @@ class EM_Event_Posts_Admin{
 					<?php endif;
 					echo ($EM_Event->is_recurrence()) ? '<br />':'';
 				}
-				if ( $EM_Event->is_recurrence() && $EM_Event->can_manage('edit_recurring_events','edit_others_recurring_events') ) {
-					$recurrence_delete_confirm = __('WARNING! You will delete ALL recurrences of this event, including booking history associated with any event in this recurrence. To keep booking information, go to the relevant single event and save it to detach it from this recurrence series.','events-manager');
+				if ( $EM_Event->is_recurrence() && current_user_can('edit_recurring_events','edit_others_recurring_events') ) {
+					$actions = array();
+					if( $EM_Event->get_event_recurrence()->can_manage('edit_recurring_events', 'edit_others_recurring_events') ){
+						$actions[] = '<a href="'. admin_url() .'post.php?action=edit&amp;post='. $EM_Event->get_event_recurrence()->post_id .'">'. esc_html__( 'Edit Recurring Events', 'events-manager'). '</a>';
+						$actions[] = '<a class="em-detach-link" href="'. esc_url($EM_Event->get_detach_url()) .'">'. esc_html__('Detach', 'events-manager') .'</a>';
+					}
+					if( $EM_Event->get_event_recurrence()->can_manage('delete_recurring_events', 'delete_others_recurring_events') ){
+						$actions[] = '<span class="trash"><a class="em-delete-recurrence-link" href="'. get_delete_post_link($EM_Event->get_event_recurrence()->post_id) .'">'. esc_html__('Delete','events-manager') .'</a></span>';
+					}
 					?>
 					<strong>
-					<?php echo $EM_Event->get_recurrence_description(); ?> <br />
+					<?php echo $EM_Event->get_recurrence_description(); ?>
 					</strong>
+					<?php if( !empty($actions) ): ?>
+					<br >
 					<div class="row-actions">
-						<a href="<?php echo admin_url(); ?>post.php?action=edit&amp;post=<?php echo $EM_Event->get_event_recurrence()->post_id ?>"><?php _e ( 'Edit Recurring Events', 'events-manager'); ?></a> | <span class="trash"><a class="em-delete-recurrence-link" href="<?php echo get_delete_post_link($EM_Event->get_event_recurrence()->post_id); ?>"><?php _e('Delete','events-manager'); ?></a></span> | <a class="em-detach-link" href="<?php echo $EM_Event->get_detach_url(); ?>"><?php _e('Detach', 'events-manager'); ?></a>
+						<?php echo implode(' | ', $actions); ?>
 					</div>
-					<?php
+					<?php endif;
 				}
 				
 				break;
@@ -308,7 +317,7 @@ class EM_Event_Recurring_Posts_Admin{
 	
 	public static function admin_notices(){
 		?>
-		<div class="updated">
+		<div class="notice notice-info">
 			<p><?php esc_html_e( 'Modifications to recurring events will be applied to all recurrences and will overwrite any changes made to those individual event recurrences.', 'events-manager'); ?></p>
 			<p><?php esc_html_e( 'Bookings to individual event recurrences will be preserved if event times and ticket settings are not modified.', 'events-manager'); ?></p>
 			<p>
@@ -349,11 +358,15 @@ class EM_Event_Recurring_Posts_Admin{
 	    unset($columns['comments']);
 	    unset($columns['date']);
 	    unset($columns['author']);
-	    return array_merge($id_array, $columns, array(
+	    $columns = array_merge($id_array, $columns, array(
 	    	'location' => __('Location','events-manager'),
 	    	'date-time' => __('Date and Time','events-manager'),
 	    	'author' => __('Owner','events-manager'),
 	    ));
+		if( !get_option('dbem_locations_enabled') ){
+			unset($columns['location']);
+		}
+		return $columns;
 	}
 
 	
@@ -370,12 +383,14 @@ class EM_Event_Recurring_Posts_Admin{
 					//get meta value to see if post has location, otherwise
 					$EM_Location = $EM_Event->get_location();
 					if( !empty($EM_Location->location_id) ){
-						echo "<strong><a href='". $EM_Location->get_permalink()."'>" . $EM_Location->location_name . "</a></strong> 
-							<span class='row-actions'> - 
-								<a href='". esc_url($EM_Location->get_edit_url())."'>". esc_html__('Edit') ."</a> | 
-								<a href='". esc_url($EM_Location->get_permalink())."'>". esc_html__('View') ."</a>
-							</span>
-							<br/>" . $EM_Location->location_address . " - " . $EM_Location->location_town;
+						$actions = array();
+						$actions[] = "<a href='". esc_url($EM_Location->get_permalink())."'>". esc_html__('View') ."</a>";
+						if( $EM_Location->can_manage('edit_locations', 'edit_others_locations') ) {
+							$actions[] = "<a href='". esc_url($EM_Location->get_edit_url())."'>". esc_html__('Edit') ."</a>";
+						}
+						echo "<strong><a href='". $EM_Location->get_permalink()."'>" . $EM_Location->location_name . "</a></strong>";
+						echo "<span class='row-actions'> - ". implode(' | ', $actions) . "</span>";
+						echo "<br/>" . $EM_Location->location_address . " - " . $EM_Location->location_town;
 					}else{
 						echo __('None','events-manager');
 					}

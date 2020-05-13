@@ -2,96 +2,107 @@
 
 namespace MailPoet\API\JSON\v1;
 
+if (!defined('ABSPATH')) exit;
+
+
 use MailPoet\API\JSON\Endpoint as APIEndpoint;
 use MailPoet\API\JSON\Error as APIError;
+use MailPoet\API\JSON\Response;
 use MailPoet\Config\AccessControl;
-use MailPoet\Mailer\Mailer;
+use MailPoet\Cron\Triggers\WordPress;
 use MailPoet\Models\Newsletter;
 use MailPoet\Models\SendingQueue as SendingQueueModel;
-use MailPoet\Models\Subscriber;
 use MailPoet\Newsletter\Scheduler\Scheduler;
 use MailPoet\Segments\SubscribersFinder;
-use MailPoet\Util\Helpers;
-
-if(!defined('ABSPATH')) exit;
+use MailPoet\Tasks\Sending as SendingTask;
+use MailPoet\Util\License\Features\Subscribers as SubscribersFeature;
 
 class SendingQueue extends APIEndpoint {
-  public $permissions = array(
-    'global' => AccessControl::PERMISSION_MANAGE_EMAILS
-  );
+  public $permissions = [
+    'global' => AccessControl::PERMISSION_MANAGE_EMAILS,
+  ];
 
-  function add($data = array()) {
-    $newsletter_id = (isset($data['newsletter_id'])
+  /** @var SubscribersFeature */
+  private $subscribersFeature;
+
+  public function __construct(SubscribersFeature $subscribersFeature) {
+    $this->subscribersFeature = $subscribersFeature;
+  }
+
+  public function add($data = []) {
+    if ($this->subscribersFeature->check()) {
+      return $this->errorResponse([
+        APIError::FORBIDDEN => __('Subscribers limit reached.', 'mailpoet'),
+      ], [], Response::STATUS_FORBIDDEN);
+    }
+    $newsletterId = (isset($data['newsletter_id'])
       ? (int)$data['newsletter_id']
       : false
     );
 
     // check that the newsletter exists
-    $newsletter = Newsletter::filter('filterWithOptions')
-      ->findOne($newsletter_id);
+    $newsletter = Newsletter::findOneWithOptions($newsletterId);
 
-    if($newsletter === false) {
-      return $this->errorResponse(array(
-        APIError::NOT_FOUND => __('This newsletter does not exist.', 'mailpoet')
-      ));
+    if (!$newsletter instanceof Newsletter) {
+      return $this->errorResponse([
+        APIError::NOT_FOUND => __('This newsletter does not exist.', 'mailpoet'),
+      ]);
     }
 
     // check that the sending method has been configured properly
     try {
-      new Mailer(false);
-    } catch(\Exception $e) {
-      return $this->errorResponse(array(
-        $e->getCode() => $e->getMessage()
-      ));
+      $mailer = new \MailPoet\Mailer\Mailer();
+      $mailer->init();
+    } catch (\Exception $e) {
+      return $this->errorResponse([
+        $e->getCode() => $e->getMessage(),
+      ]);
     }
 
     // add newsletter to the sending queue
-    $queue = SendingQueueModel::whereNull('status')
-    ->where('newsletter_id', $newsletter->id)
-    ->findOne();
-
-    if(!empty($queue)) {
-      return $this->errorResponse(array(
-        APIError::NOT_FOUND => __('This newsletter is already being sent.', 'mailpoet')
-      ));
-    }
-    $queue = SendingQueueModel::where('newsletter_id', $newsletter->id)
-      ->where('status', SendingQueueModel::STATUS_SCHEDULED)
+    $queue = SendingQueueModel::joinWithTasks()
+      ->where('queues.newsletter_id', $newsletter->id)
+      ->whereNull('tasks.status')
       ->findOne();
-    if(!$queue) {
-      $queue = SendingQueueModel::create();
-      $queue->newsletter_id = $newsletter->id;
+
+    if (!empty($queue)) {
+      return $this->errorResponse([
+        APIError::NOT_FOUND => __('This newsletter is already being sent.', 'mailpoet'),
+      ]);
     }
 
-    if((bool)$newsletter->isScheduled) {
+    $scheduledQueue = SendingQueueModel::joinWithTasks()
+      ->where('queues.newsletter_id', $newsletter->id)
+      ->where('tasks.status', SendingQueueModel::STATUS_SCHEDULED)
+      ->findOne();
+    if ($scheduledQueue instanceof SendingQueueModel) {
+      $queue = SendingTask::createFromQueue($scheduledQueue);
+    } else {
+      $queue = SendingTask::create();
+      $queue->newsletterId = $newsletter->id;
+    }
+
+    WordPress::resetRunInterval();
+
+    if ((bool)$newsletter->isScheduled) {
       // set newsletter status
       $newsletter->setStatus(Newsletter::STATUS_SCHEDULED);
 
       // set queue status
       $queue->status = SendingQueueModel::STATUS_SCHEDULED;
-      $queue->scheduled_at = Scheduler::formatDatetimeString(
-        $newsletter->scheduledAt
-      );
-      $queue->subscribers = null;
-      $queue->count_total = $queue->count_to_process = 0;
+      $queue->scheduledAt = Scheduler::formatDatetimeString($newsletter->scheduledAt);
     } else {
-      $segments = $newsletter->segments()->findArray();
+      $segments = $newsletter->segments()->findMany();
       $finder = new SubscribersFinder();
-      $subscribers = $finder->getSubscribersByList($segments);
-      $subscribers = Helpers::flattenArray($subscribers);
-      if(!count($subscribers)) {
-        return $this->errorResponse(array(
-          APIError::UNKNOWN => __('There are no subscribers in that list!', 'mailpoet')
-        ));
+      $subscribersCount = $finder->addSubscribersToTaskFromSegments($queue->task(), $segments);
+      if (!$subscribersCount) {
+        return $this->errorResponse([
+          APIError::UNKNOWN => __('There are no subscribers in that list!', 'mailpoet'),
+        ]);
       }
+      $queue->updateCount();
       $queue->status = null;
-      $queue->scheduled_at = null;
-      $queue->subscribers = serialize(
-        array(
-          'to_process' => $subscribers
-        )
-      );
-      $queue->count_total = $queue->count_to_process = count($subscribers);
+      $queue->scheduledAt = null;
 
       // set newsletter status
       $newsletter->setStatus(Newsletter::STATUS_SENDING);
@@ -99,7 +110,7 @@ class SendingQueue extends APIEndpoint {
     $queue->save();
 
     $errors = $queue->getErrors();
-    if(!empty($errors)) {
+    if (!empty($errors)) {
       return $this->errorResponse($errors);
     } else {
       return $this->successResponse(
@@ -108,56 +119,61 @@ class SendingQueue extends APIEndpoint {
     }
   }
 
-  function pause($data = array()) {
-    $newsletter_id = (isset($data['newsletter_id'])
+  public function pause($data = []) {
+    $newsletterId = (isset($data['newsletter_id'])
       ? (int)$data['newsletter_id']
       : false
     );
-    $newsletter = Newsletter::findOne($newsletter_id);
+    $newsletter = Newsletter::findOne($newsletterId);
 
-    if($newsletter === false) {
-      return $this->errorResponse(array(
-        APIError::NOT_FOUND => __('This newsletter does not exist.', 'mailpoet')
-      ));
-    } else {
+    if ($newsletter instanceof Newsletter) {
       $queue = $newsletter->getQueue();
 
-      if($queue === false) {
-        return $this->errorResponse(array(
-          APIError::UNKNOWN => __('This newsletter has not been sent yet.', 'mailpoet')
-        ));
+      if ($queue === false) {
+        return $this->errorResponse([
+          APIError::UNKNOWN => __('This newsletter has not been sent yet.', 'mailpoet'),
+        ]);
       } else {
         $queue->pause();
         return $this->successResponse(
           $newsletter->getQueue()->asArray()
         );
       }
+    } else {
+      return $this->errorResponse([
+        APIError::NOT_FOUND => __('This newsletter does not exist.', 'mailpoet'),
+      ]);
     }
   }
 
-  function resume($data = array()) {
-    $newsletter_id = (isset($data['newsletter_id'])
+  public function resume($data = []) {
+    if ($this->subscribersFeature->check()) {
+      return $this->errorResponse([
+        APIError::FORBIDDEN => __('Subscribers limit reached.', 'mailpoet'),
+      ], [], Response::STATUS_FORBIDDEN);
+    }
+    $newsletterId = (isset($data['newsletter_id'])
       ? (int)$data['newsletter_id']
       : false
     );
-    $newsletter = Newsletter::findOne($newsletter_id);
-    if($newsletter === false) {
-      return $this->errorResponse(array(
-        APIError::NOT_FOUND => __('This newsletter does not exist.', 'mailpoet')
-      ));
-    } else {
+    $newsletter = Newsletter::findOne($newsletterId);
+    if ($newsletter instanceof Newsletter) {
       $queue = $newsletter->getQueue();
 
-      if($queue === false) {
-        return $this->errorResponse(array(
-          APIError::UNKNOWN => __('This newsletter has not been sent yet.', 'mailpoet')
-        ));
+      if ($queue === false) {
+        return $this->errorResponse([
+          APIError::UNKNOWN => __('This newsletter has not been sent yet.', 'mailpoet'),
+        ]);
       } else {
         $queue->resume();
         return $this->successResponse(
           $newsletter->getQueue()->asArray()
         );
       }
+    } else {
+      return $this->errorResponse([
+        APIError::NOT_FOUND => __('This newsletter does not exist.', 'mailpoet'),
+      ]);
     }
   }
 }

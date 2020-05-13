@@ -1,10 +1,12 @@
 <?php
+
 namespace MailPoet\Tasks;
+
+if (!defined('ABSPATH')) exit;
+
 
 use MailPoet\Models\ScheduledTask;
 use MailPoet\Models\ScheduledTaskSubscriber;
-
-if(!defined('ABSPATH')) exit;
 
 class Subscribers {
   private $task;
@@ -13,35 +15,57 @@ class Subscribers {
     $this->task = $task;
   }
 
-  function getSubscribers() {
+  public function setSubscribers(array $subscriberIds) {
+    ScheduledTaskSubscriber::setSubscribers($this->task->id, $subscriberIds);
+  }
+
+  public function getSubscribers() {
     return ScheduledTaskSubscriber::where('task_id', $this->task->id);
   }
 
-  function isSubscriberProcessed($subscriber_id) {
+  public function isSubscriberProcessed($subscriberId) {
     $subscriber = $this->getSubscribers()
-      ->where('subscriber_id', $subscriber_id)
+      ->where('subscriber_id', $subscriberId)
+      ->where('processed', ScheduledTaskSubscriber::STATUS_PROCESSED)
       ->findOne();
     return !empty($subscriber);
   }
 
-  function removeSubscribers($subscribers_to_remove) {
+  public function removeSubscribers(array $subscribersToRemove) {
     $this->getSubscribers()
-      ->whereIn('subscriber_id', $subscribers_to_remove)
+      ->whereIn('subscriber_id', $subscribersToRemove)
       ->deleteMany();
     $this->checkCompleted();
   }
 
-  function updateProcessedSubscribers(array $processed_subscribers) {
+  public function removeAllSubscribers() {
     $this->getSubscribers()
-      ->whereIn('subscriber_id', $processed_subscribers)
-      ->findResultSet()
-      ->set('processed', ScheduledTaskSubscriber::STATUS_PROCESSED)
-      ->save();
+      ->deleteMany();
     $this->checkCompleted();
   }
 
-  private function checkCompleted() {
-    if(!ScheduledTaskSubscriber::getUnprocessedCount($this->task->id)) {
+  public function updateProcessedSubscribers(array $processedSubscribers) {
+    if (!empty($processedSubscribers)) {
+      $this->getSubscribers()
+        ->whereIn('subscriber_id', $processedSubscribers)
+        ->findResultSet()
+        ->set('processed', ScheduledTaskSubscriber::STATUS_PROCESSED)
+        ->save();
+    }
+    $this->checkCompleted();
+  }
+
+  public function saveSubscriberError($subcriberId, $errorMessage) {
+    $this->getSubscribers()
+      ->where('subscriber_id', $subcriberId)
+      ->findResultSet()
+      ->set('failed', ScheduledTaskSubscriber::FAIL_STATUS_FAILED)
+      ->set('error', $errorMessage)
+      ->save();
+  }
+
+  private function checkCompleted($count = null) {
+    if (!$count && !ScheduledTaskSubscriber::getUnprocessedCount($this->task->id)) {
       $this->task->complete();
     }
   }

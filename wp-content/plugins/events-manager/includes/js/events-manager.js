@@ -8,9 +8,8 @@ jQuery(document).ready( function($){
 		em_setup_timepicker('body');
 	}
 	/* Calendar AJAX */
-	$('.em-calendar-wrapper a').unbind("click");
-	$('.em-calendar-wrapper a').undelegate("click");
-	$('.em-calendar-wrapper').delegate('a.em-calnav, a.em-calnav', 'click', function(e){
+	$('.em-calendar-wrapper a').off("click");
+	$('.em-calendar-wrapper').on('click', 'a.em-calnav, a.em-calnav', function(e){
 		e.preventDefault();
 		$(this).closest('.em-calendar-wrapper').prepend('<div class="loading" id="em-loading"></div>');
 		var url = em_ajaxify($(this).attr('href'));
@@ -18,7 +17,7 @@ jQuery(document).ready( function($){
 	} );
 
 	//Events Search
-	$(document).delegate('.em-toggle', 'click change', function(e){
+	$(document).on('click change', '.em-toggle', function(e){
 		e.preventDefault();
 		//show or hide advanced tickets, hidden by default
 		var el = $(this);
@@ -98,7 +97,7 @@ jQuery(document).ready( function($){
 	});
 	
 	//in order for this to work, you need the above classes to be present in your templates
-	$(document).delegate('.em-search-form, .em-events-search-form', 'submit', function(e){
+	$(document).on('submit', '.em-search-form, .em-events-search-form', function(e){
 		var form = $(this);
     	if( this.em_search && this.em_search.value == EM.txt_search){ this.em_search.value = ''; }
     	var results_wrapper = form.closest('.em-search-wrapper').find('.em-search-ajax');
@@ -130,7 +129,7 @@ jQuery(document).ready( function($){
     	}
 	});
 	if( $('.em-search-ajax').length > 0 ){
-		$(document).delegate('.em-search-ajax a.page-numbers', 'click', function(e){
+		$(document).on('click', '.em-search-ajax a.page-numbers', function(e){
 			var a = $(this);
 			var data = a.closest('.em-pagination').attr('data-em-ajax');
 			var wrapper = a.closest('.em-search-ajax');
@@ -255,7 +254,7 @@ jQuery(document).ready( function($){
 			//create copy of template slot, insert so ready for population
 			var tickets = $('#em-tickets-form table tbody');
 			var rowNo = tickets.length+1;
-			var slot = tickets.first().clone(true).attr('id','em-ticket-'+ rowNo).appendTo($('#em-tickets-form table'));
+			var slot = tickets.first('.em-ticket-template').clone(true).attr('id','em-ticket-'+ rowNo).removeClass('em-ticket-template').addClass('em-ticket').appendTo($('#em-tickets-form table'));
 			//change the index of the form element names
 			slot.find('*[name]').each( function(index,el){
 				el = $(el);
@@ -269,9 +268,10 @@ jQuery(document).ready( function($){
 			em_setup_datepicker(slot);
 			em_setup_timepicker(slot);
 		    $('html, body').animate({ scrollTop: slot.offset().top - 30 }); //sends user to form
+			check_ticket_sortability();
 		});
 		//Edit a Ticket
-		$(document).delegate('.ticket-actions-edit', 'click', function(e){
+		$(document).on('click', '.ticket-actions-edit', function(e){
 			e.preventDefault();
 			reset_ticket_forms();
 			var tbody = $(this).closest('tbody');
@@ -279,7 +279,7 @@ jQuery(document).ready( function($){
 			tbody.find('tr.em-tickets-row-form').fadeIn();
 			return false;
 		});
-		$(document).delegate('.ticket-actions-edited', 'click', function(e){
+		$(document).on('click', '.ticket-actions-edited', function(e){
 			e.preventDefault();
 			var tbody = $(this).closest('tbody');
 			var rowNo = tbody.attr('id').replace('em-ticket-','');
@@ -322,7 +322,7 @@ jQuery(document).ready( function($){
 		    $('html, body').animate({ scrollTop: tbody.parent().offset().top - 30 }); //sends user back to top of form
 			return false;
 		});
-		$(document).delegate('.em-ticket-form select.ticket_type','change', function(e){
+		$(document).on('change', '.em-ticket-form select.ticket_type', function(e){
 			//check if ticket is for all users or members, if members, show roles to limit the ticket to
 			var el = $(this);
 			if( el.find('option:selected').val() == 'members' ){
@@ -331,7 +331,7 @@ jQuery(document).ready( function($){
 				el.closest('.em-ticket-form').find('.ticket-roles').hide();
 			}
 		});
-		$(document).delegate('.em-ticket-form .ticket-options-advanced','click', function(e){
+		$(document).on('click', '.em-ticket-form .ticket-options-advanced', function(e){
 			//show or hide advanced tickets, hidden by default
 			e.preventDefault();
 			var el = $(this);
@@ -356,7 +356,7 @@ jQuery(document).ready( function($){
 			if( show_advanced ) el.find('.ticket-options-advanced').trigger('click');
 		});
 		//Delete a ticket
-		$(document).delegate('.ticket-actions-delete', 'click', function(e){
+		$(document).on('click', '.ticket-actions-delete', function(e){
 			e.preventDefault();
 			var el = $(this);
 			var tbody = el.closest('tbody');
@@ -375,13 +375,38 @@ jQuery(document).ready( function($){
 				//not saved to db yet, so just remove
 				tbody.remove();
 			}
+			check_ticket_sortability();
 			return false;
 		});
+		//Sort Tickets
+		$('#em-tickets-form.em-tickets-sortable table').sortable({
+			items: '> tbody',
+			placeholder: "em-ticket-sortable-placeholder",
+			handle:'.ticket-status',
+			helper: function( event, el ){
+				var helper = $(el).clone().addClass('em-ticket-sortable-helper');
+				var tds = helper.find('.em-tickets-row td').length;
+				helper.children().remove();
+				helper.append('<tr class="em-tickets-row"><td colspan="'+tds+'" style="text-align:left; padding-left:15px;"><span class="dashicons dashicons-tickets-alt"></span></td></tr>');
+				return helper;
+			},
+		});
+		var check_ticket_sortability = function(){
+			var em_tickets = $('#em-tickets-form table tbody.em-ticket');
+			if( em_tickets.length == 1 ){
+				em_tickets.find('.ticket-status').addClass('single');
+				$('#em-tickets-form.em-tickets-sortable table').sortable( "option", "disabled", true );
+			}else{
+				em_tickets.find('.ticket-status').removeClass('single');
+				$('#em-tickets-form.em-tickets-sortable table').sortable( "option", "disabled", false );
+			}
+		};
+		check_ticket_sortability();
 	}
 	//Manageing Bookings
 	if( $('#em-bookings-table').length > 0 ){
 		//Pagination link clicks
-		$(document).delegate('#em-bookings-table .tablenav-pages a', 'click', function(){
+		$(document).on('click', '#em-bookings-table .tablenav-pages a', function(){
 			var el = $(this);
 			var form = el.parents('#em-bookings-table form.bookings-filter');
 			//get page no from url, change page, submit form
@@ -441,10 +466,10 @@ jQuery(document).ready( function($){
 		if( $("#em-bookings-table-settings").length > 0 ){
 			//Settings Overlay
 			$("#em-bookings-table-settings").dialog(em_bookings_settings_dialog);
-			$(document).delegate('#em-bookings-table-settings-trigger','click', function(e){ e.preventDefault(); $("#em-bookings-table-settings").dialog('open'); });
+			$(document).on('click', '#em-bookings-table-settings-trigger', function(e){ e.preventDefault(); $("#em-bookings-table-settings").dialog('open'); });
 			//Export Overlay
 			$("#em-bookings-table-export").dialog(em_bookings_export_dialog);
-			$(document).delegate('#em-bookings-table-export-trigger','click', function(e){ e.preventDefault(); $("#em-bookings-table-export").dialog('open'); });
+			$(document).on('click', '#em-bookings-table-export-trigger', function(e){ e.preventDefault(); $("#em-bookings-table-export").dialog('open'); });
 			var export_overlay_show_tickets = function(){
 				if( $('#em-bookings-table-export-form input[name=show_tickets]').is(':checked') ){
 					$('#em-bookings-table-export-form .em-bookings-col-item-ticket').show();
@@ -479,7 +504,7 @@ jQuery(document).ready( function($){
 			load_ui_css = true;
 		}
 		//Widgets and filter submissions
-		$(document).delegate('#em-bookings-table form.bookings-filter', 'submit', function(e){
+		$(document).on('submit', '#em-bookings-table form.bookings-filter', function(e){
 			var el = $(this);			
 			//append loading spinner
 			el.parents('#em-bookings-table').find('.table-wrap').first().append('<div id="em-loading" />');
@@ -495,7 +520,7 @@ jQuery(document).ready( function($){
 			return false;
 		});
 		//Approve/Reject Links
-		$(document).delegate('.em-bookings-approve,.em-bookings-reject,.em-bookings-unapprove,.em-bookings-delete', 'click', function(){
+		$(document).on('click', '.em-bookings-approve,.em-bookings-reject,.em-bookings-unapprove,.em-bookings-delete', function(){
 			var el = $(this); 
 			if( el.hasClass('em-bookings-delete') ){
 				if( !confirm(EM.booking_delete) ){ return false; }
@@ -510,7 +535,7 @@ jQuery(document).ready( function($){
 	//Old Bookings Table - depreciating soon
 	if( $('.em_bookings_events_table').length > 0 ){
 		//Widgets and filter submissions
-		$(document).delegate('.em_bookings_events_table form', 'submit', function(e){
+		$(document).on('submit', '.em_bookings_events_table form', function(e){
 			var el = $(this);
 			var url = em_ajaxify( el.attr('action') );		
 			el.parents('.em_bookings_events_table').find('.table-wrap').first().append('<div id="em-loading" />');
@@ -520,7 +545,7 @@ jQuery(document).ready( function($){
 			return false;
 		});
 		//Pagination link clicks
-		$(document).delegate('.em_bookings_events_table .tablenav-pages a', 'click', function(){		
+		$(document).on('click', '.em_bookings_events_table .tablenav-pages a', function(){
 			var el = $(this);
 			var url = em_ajaxify( el.attr('href') );	
 			el.parents('.em_bookings_events_table').find('.table-wrap').first().append('<div id="em-loading" />');
@@ -532,7 +557,7 @@ jQuery(document).ready( function($){
 	}
 	
 	//Manual Booking
-	$('a.em-booking-button').click(function(e){
+	$(document).on('click', 'a.em-booking-button', function(e){
 		e.preventDefault();
 		var button = $(this);
 		if( button.text() != EM.bb_booked && $(this).text() != EM.bb_booking){
@@ -559,7 +584,7 @@ jQuery(document).ready( function($){
 		}
 		return false;
 	});	
-	$('a.em-cancel-button').click(function(e){
+	$(document).on('click', 'a.em-cancel-button', function(e){
 		e.preventDefault();
 		var button = $(this);
 		if( button.text() != EM.bb_cancelled && button.text() != EM.bb_canceling){
@@ -671,23 +696,25 @@ jQuery(document).ready( function($){
 				jQuery('input#location-state').val(ui.item.state);
 				jQuery('input#location-region').val(ui.item.region);
 				jQuery('input#location-postcode').val(ui.item.postcode);
+				jQuery('input#location-latitude').val(ui.item.latitude);
+				jQuery('input#location-longitude').val(ui.item.longitude);
 				if( ui.item.country == '' ){
 					jQuery('select#location-country option:selected').removeAttr('selected');
 				}else{
 					jQuery('select#location-country option[value="'+ui.item.country+'"]').attr('selected', 'selected');
 				}
-				jQuery('div.em-location-data input, div.em-location-data select').css('background-color','#ccc').attr('readonly','readonly');
+				jQuery('div.em-location-data input, div.em-location-data select').css('background-color','#ccc').prop('readonly', true);
 				jQuery('#em-location-reset').show();
 				jQuery('#em-location-search-tip').hide();
 				jQuery(document).triggerHandler('em_locations_autocomplete_selected', [event, ui]);
 				return false;
 			}
 		}).data( "ui-autocomplete" )._renderItem = function( ul, item ) {
-			html_val = "<a>" + item.label + '<br><span style="font-size:11px"><em>'+ item.address + ', ' + item.town+"</em></span></a>";
+			html_val = "<a>" + em_esc_attr(item.label) + '<br><span style="font-size:11px"><em>'+ em_esc_attr(item.address) + ', ' + em_esc_attr(item.town)+"</em></span></a>";
 			return jQuery( "<li></li>" ).data( "item.autocomplete", item ).append(html_val).appendTo( ul );
 		};
 		jQuery('#em-location-reset a').click( function(){
-			jQuery('div.em-location-data input').css('background-color','#fff').val('').removeAttr('readonly');
+			jQuery('div.em-location-data input').css('background-color','#fff').val('').prop('readonly', false);
 			jQuery('div.em-location-data select').css('background-color','#fff');
 			jQuery('div.em-location-data option:selected').removeAttr('selected');
 			jQuery('input#location-id').val('');
@@ -703,12 +730,12 @@ jQuery(document).ready( function($){
 			return false;
 		});
 		if( jQuery('input#location-id').val() != '0' && jQuery('input#location-id').val() != '' ){
-			jQuery('div.em-location-data input, div.em-location-data select').css('background-color','#ccc').attr('readonly','readonly');
+			jQuery('div.em-location-data input, div.em-location-data select').css('background-color','#ccc').prop('readonly', true);
 			jQuery('#em-location-reset').show();
 			jQuery('#em-location-search-tip').hide();
 		}
 	}
-	
+	jQuery(document).triggerHandler('em_javascript_loaded');
 });
 
 function em_load_jquery_css(){
@@ -724,7 +751,7 @@ function em_load_jquery_css(){
 function em_setup_datepicker(wrap){	
 	wrap = jQuery(wrap);
 	//default picker vals
-	var datepicker_vals = { altFormat: "yy-mm-dd", changeMonth: true, changeYear: true, firstDay : EM.firstDay, yearRange:'-100:+10' };
+	var datepicker_vals = { altFormat: "yy-mm-dd", changeMonth: true, changeYear: true, firstDay : EM.firstDay, yearRange:'c-100:c+15' };
 	if( EM.dateFormat ) datepicker_vals.dateFormat = EM.dateFormat;
 	if( EM.yearRange ) datepicker_vals.yearRange = EM.yearRange;
 	jQuery(document).triggerHandler('em_datepicker', datepicker_vals);
@@ -845,7 +872,7 @@ var em_ajaxify = function(url){
 var em_maps_loaded = false;
 var maps = {};
 var maps_markers = {};
-var infowindow;
+var infoWindow;
 //loads maps script if not already loaded and executes EM maps script
 function em_maps_load(){
 	if( !em_maps_loaded ){
@@ -855,9 +882,9 @@ function em_maps_load(){
 			script.id = "google-maps";
 			var proto = (EM.is_ssl) ? 'https:' : 'http:';
 			if( typeof EM.google_maps_api !== 'undefined' ){
-				script.src = proto + '//maps.google.com/maps/api/js?v=3&libraries=places&callback=em_maps&key='+EM.google_maps_api;
+				script.src = proto + '//maps.google.com/maps/api/js?v=quarterly&libraries=places&callback=em_maps&key='+EM.google_maps_api;
 			}else{
-				script.src = proto + '//maps.google.com/maps/api/js?v=3&libraries=places&callback=em_maps';
+				script.src = proto + '//maps.google.com/maps/api/js?v=quarterly&libraries=places&callback=em_maps';
 			}
 			document.body.appendChild(script);
 		}else if( typeof google === 'object' && typeof google.maps === 'object' && !em_maps_loaded ){
@@ -942,13 +969,13 @@ function em_maps_load_location(el){
 	};
 	jQuery(document).triggerHandler('em_maps_location_marker_options', marker_options);
 	maps_markers[map_id] = new google.maps.Marker(marker_options);
-	infowindow = new google.maps.InfoWindow({ content: jQuery('#em-location-map-info-'+map_id+' .em-map-balloon').get(0) });
-	infowindow.open(maps[map_id],maps_markers[map_id]);
+	infoWindow = new google.maps.InfoWindow({ content: jQuery('#em-location-map-info-'+map_id+' .em-map-balloon').get(0) });
+	infoWindow.open(maps[map_id],maps_markers[map_id]);
 	maps[map_id].panBy(40,-70);
 	
 	//JS Hook for handling map after instantiation
 	//Example hook, which you can add elsewhere in your theme's JS - jQuery(document).bind('em_maps_location_hook', function(){ alert('hi');} );
-	jQuery(document).triggerHandler('em_maps_location_hook', [maps[map_id], infowindow, maps_markers[map_id], map_id]);
+	jQuery(document).triggerHandler('em_maps_location_hook', [maps[map_id], infoWindow, maps_markers[map_id], map_id]);
 	//map resize listener
 	jQuery(window).on('resize', function(e) {
 		google.maps.event.trigger(maps[map_id], "resize");
@@ -978,25 +1005,22 @@ function em_maps() {
 			if( !(location_latitude == 0 && location_longitude == 0) ){
 				var position = new google.maps.LatLng(location_latitude, location_longitude); //the location coords
 				marker.setPosition(position);
-				var mapTitle = (jQuery('input#location-name').length > 0) ? jQuery(jQuery.parseHTML(jQuery('input#location-name').val())).text():jQuery('input#title').val();
-				var mapAddress = jQuery('#location-address').val();
-				var mapTown = jQuery('#location-town').val();
-				marker.setTitle( jQuery('input#location-name input#title, #location-select-id').first().val() );
+				var mapTitle = (jQuery('input#location-name').length > 0) ? jQuery('input#location-name').val():jQuery('input#title').val();
+				mapTitle = em_esc_attr(mapTitle);
+				marker.setTitle( mapTitle );
 				jQuery('#em-map').show();
 				jQuery('#em-map-404').hide();
 				google.maps.event.trigger(map, 'resize');
 				map.setCenter(position);
 				map.panBy(40,-55);
 				infoWindow.setContent( 
-					'<div id="location-balloon-content"><strong>' + 
-					mapTitle + 
-					'</strong><br>' + 
-					jQuery(jQuery.parseHTML(mapAddress)).text() + 
-					'<br>' + jQuery(jQuery.parseHTML(mapTown)).text() + 
+					'<div id="location-balloon-content"><strong>' + mapTitle + '</strong><br>' + 
+					em_esc_attr(jQuery('#location-address').val()) + 
+					'<br>' + em_esc_attr(jQuery('#location-town').val()) + 
 					'</div>'
 				);
 				infoWindow.open(map, marker);
-				jQuery(document).triggerHandler('em_maps_location_hook', [map, infowindow, marker, 0]);
+				jQuery(document).triggerHandler('em_maps_location_hook', [map, infoWindow, marker, 0]);
 			} else {
     			jQuery('#em-map').hide();
     			jQuery('#em-map-404').show();
@@ -1019,7 +1043,7 @@ function em_maps() {
 						infoWindow.setContent( '<div id="location-balloon-content">'+ data.location_balloon +'</div>');
 						infoWindow.open(map, marker);
 						google.maps.event.trigger(map, 'resize');
-						jQuery(document).triggerHandler('em_maps_location_hook', [map, infowindow, marker, 0]);
+						jQuery(document).triggerHandler('em_maps_location_hook', [map, infoWindow, marker, 0]);
 					}else{
 						jQuery('#em-map').hide();
 						jQuery('#em-map-404').show();
@@ -1030,6 +1054,7 @@ function em_maps() {
 		jQuery('#location-select-id, input#location-id').change( function(){get_map_by_id(jQuery(this).val());} );
 		jQuery('#location-name, #location-town, #location-address, #location-state, #location-postcode, #location-country').change( function(){
 			//build address
+			if( jQuery(this).prop('readonly') === true ) return;
 			var addresses = [ jQuery('#location-address').val(), jQuery('#location-town').val(), jQuery('#location-state').val(), jQuery('#location-postcode').val() ];
 			var address = '';
 			jQuery.each( addresses, function(i, val){
@@ -1094,7 +1119,7 @@ function em_maps() {
 			}else{
 				refresh_map_location();
 			}
-			jQuery(document).triggerHandler('em_map_loaded', [map, infowindow, marker]);
+			jQuery(document).triggerHandler('em_map_loaded', [map, infoWindow, marker]);
 		}
 		//map resize listener
 		jQuery(window).on('resize', function(e) {
@@ -1110,10 +1135,15 @@ function em_maps() {
 function em_map_infobox(marker, message, map) {
   var iw = new google.maps.InfoWindow({ content: message });
   google.maps.event.addListener(marker, 'click', function() {
-	if( infowindow ) infowindow.close();
-	infowindow = iw;
+	if( infoWindow ) infoWindow.close();
+	infoWindow = iw;
     iw.open(map,marker);
   });
+}
+
+function em_esc_attr( str ){
+	if( typeof str !== 'string' ) return '';
+	return str.replace(/</gi,'&lt;').replace(/>/gi,'&gt;');
 }
 
 /* jQuery timePicker - http://labs.perifer.se/timedatepicker/ @ http://github.com/perifer/timePicker commit 100644 */

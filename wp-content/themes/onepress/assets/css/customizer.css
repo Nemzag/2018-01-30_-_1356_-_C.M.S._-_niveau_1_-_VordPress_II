@@ -14,7 +14,6 @@ li#accordion-panel-onepress_typo > .accordion-section-title
     font-weight: 600;
     margin: 1px 0 0 2px;
     vertical-align: top;
-    -webkit-border-radius: 10px;
     border-radius: 10px;
     z-index: 26;
 }
@@ -64,8 +63,10 @@ li#accordion-panel-onepress_typo > .accordion-section-title
     display: block;
 }
 .list-repeatable .wp-picker-holder {
-    position: absolute;
     z-index: 99;
+}
+.list-repeatable .wp-picker-container.wp-picker-active label{
+    display: inline-block;
 }
 .list-repeatable .item{
     margin-bottom: 15px;
@@ -102,8 +103,8 @@ li#accordion-panel-onepress_typo > .accordion-section-title
 }
 
 /* Special element */
-.repeatable-customize-control.show-display-field-only .widget-content .item{
-    display: none;
+.repeatable-customize-control.show-display-field-only .widget-content .item:not(.item-show_section){
+    display: none !important;
 }
 
 /*
@@ -149,6 +150,7 @@ body .wp-full-overlay{
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.07) inset;
     color: #32373c;
     outline: 0 none;
+    -webkit-transition: border-color 50ms ease-in-out 0s;
     transition: border-color 50ms ease-in-out 0s;
     min-height: 150px;
     display: block;
@@ -291,7 +293,6 @@ body .wp-full-overlay{
 }
 
 .alpha-color-picker-wrap a.iris-square-value:focus {
-    -webkit-box-shadow: none;
     box-shadow: none;
 }
 
@@ -315,8 +316,6 @@ body .wp-full-overlay{
     z-index: 2;
     box-shadow: 0 1px 2px rgba(0,0,0,0.2);
     border: 1px solid #aaa;
-    -webkit-border-radius: 4px;
-    -moz-border-radius: 4px;
     border-radius: 4px;
     margin-top: -2px;
     top: 0;
@@ -352,8 +351,6 @@ body .wp-full-overlay{
     background-color: #FFF;
     background-image: url(../images/transparency-grid.png);
     box-shadow: 0 0 5px rgba(0,0,0,0.4) inset;
-    -webkit-border-radius: 3px;
-    -moz-border-radius: 3px;
     border-radius: 3px;
     padding: 0;
     margin-top: -24px;
@@ -567,4 +564,35 @@ body .wp-full-overlay{
 	padding: 0;
 	text-indent: 0;
 	text-align: center;
+}
+
+.onepress-c-heading {
+    padding: 5px 12px;
+    background: #BBBBBB;
+    margin: 10px -12px 2px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    font-weight: 500;
+    font-size: 12px;
+    color: #FFFFFF;
+}
+/* MISC control */
+.customize-control-heading .customize-control-title{
+    margin: 0 -12px;
+    padding: 5px 12px;
+    background: #ccc;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    font-weight: 500;
+    font-size: 12px;
+    color: #FFFFFF;
+}
+
+.repeatable-customize-control.visibility-hidden {
+    height: 0px !important;
+    display: block !important;
+    overflow: hidden !important;
+    box-shadow: none !important;
+    padding: 0px !important;
+    margin: 0px !important;
 }

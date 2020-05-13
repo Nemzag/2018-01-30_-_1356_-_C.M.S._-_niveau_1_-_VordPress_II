@@ -9,6 +9,9 @@
 
 namespace pQuery;
 
+if (!defined('ABSPATH')) exit;
+
+
 /**
  * Parses a HTML document
  *

@@ -2,6 +2,9 @@
 
 namespace pQuery;
 
+if (!defined('ABSPATH')) exit;
+
+
 interface IQuery extends \Countable {
    /// Methods ///
 

@@ -9,6 +9,9 @@
 
 namespace pQuery;
 
+if (!defined('ABSPATH')) exit;
+
+
 /**
  * Holds (x)html/xml tag information like tag name, attributes,
  * parent, children, self close, etc.

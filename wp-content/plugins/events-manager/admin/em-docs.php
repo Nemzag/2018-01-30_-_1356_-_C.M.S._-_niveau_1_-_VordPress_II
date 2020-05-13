@@ -25,8 +25,9 @@ function em_docs_init($force_init = false){
 					'post_id' => array( 'desc' => sprintf('Supply a single id or comma-separated ids (e.g. "1,2,3") to limit the search to %s with the %s.','events', 'post_id(s)')),
 					'private' => array( 'desc' => sprintf('Display private %s within your list?','events'), 'args' => '1 = yes, 0 = no', 'default' => 'If user can view private events, 1, otherwise 0.'),
 					'private_only' => array( 'desc' =>sprintf('Display only private %s ?','events'), 'args' => '1 = yes, 0 = no', 'default' => '0'),
+					'recurrences' => array( 'desc'=> 'Show only recurrences if set to 1 or non-recurrences if set to 0, shows all events if not used.'),
 					'recurrence' => array( 'desc'=> 'If set to the event id of the recurring event, this will show only events this event recurrences.', 'default'=>0),
-					'recurring' => array( 'desc'=> 'If set to 1, will only show recurring event templates. Only useful if you know what you\'re doing, use recurrence if you want events that are recurrences.', 'default'=>0),
+					'recurring' => array( 'desc'=> 'If set to 1, will only show recurring event templates. Only useful if you know what you\'re doing, use recurrence or recurrences if you want to filter event recurrences.', 'default'=>0),
 					'scope' => array( 'desc'=> 'Choose the time frame of events to show. Additionally you can supply dates (in format of YYYY-MM-DD), either single for events on a specific date or two dates separated by a comma (e.g. 2010-12-25,2010-12-31) for events ocurring between these dates.', 'default'=>'future', 'args'=>array("future", "past", "today", "tomorrow", "month", "next-month", "1-months", "2-months", "3-months", "6-months", "12-months","all")),
 					'search' => array( 'desc'=> 'Do a search for this string within event name, details and location address.' ),
 					'status' => array( 'desc' => sprintf('Limit search to %s with a spefic status (1 is active, 0 is pending approval)','events'), 'default'=>1),
@@ -78,7 +79,7 @@ function em_docs_init($force_init = false){
 					'format' => array( 'desc'=> 'If you are displaying some information with the shortcode or function (e.g. listing events), you can supply the html and placeholders here. When providing a custom format value, format_header and format_footer will be blank if not also provided.', 'default'=> 'The relevant default format will be taken from the settings page.'),
 					'format_footer' => array( 'desc'=> sprintf('If you are displaying lists (e.g. listing events), you can supply the %s html and placeholders here.','footer'), 'default'=> 'If the <em>format</em> attribute is not provided, the relevant default format will be taken from the settings page.'), 
 					'limit' => array( 'desc'=> 'Limits the amount of values returned to this number.', 'default'=>'0 (no limit)'),
-					'offset' => array( 'desc'=> 'For example, if you have ten results, if you set this to 5, only the last 5 results will be returned. Useful for pagination.', 'default'=>0), 
+					'offset' => array( 'desc'=> 'For example, if you have ten results, if you set this to 5, only the last 5 results will be returned. A limit higher than 0 is required for offsets to work.', 'default'=>0), 
 					'order' => array( 'desc'=> 'Indicates the alphabeitcal/numerical order of the lists. Choose between ASC (ascending) and DESC (descending).', 'default'=>'ASC'),
 					'orderby' => array( 'desc'=> 'Choose what fields to order your results by. You can supply a single field or multiple comma-separated fields (e.g. "event_start_date,event_name").', 'default'=>0, 'args'=>'Database table fields, e.g. <code>event_name</code> or <code>location_name</code>'),
 					'pagination' => array('desc'=> 'When using a function or shortcode that outputs items (e.g. [events_list] for events, [locations_list] for locations), if the number of items supercede the limit of items to show, setting this to 1 will show page links under the list.', 'default'=>0),
@@ -102,6 +103,9 @@ function em_docs_init($force_init = false){
 							'#_EVENTCATEGORIES' => array( 'desc' => 'Shows a list of category links this event belongs to.' ),
 							'#_EVENTCATEGORIESIMAGES'  => array( 'desc' => 'Shows a list of category images this event belongs to. Categories without an image will be ignored.' ),
 							'#_EVENTTAGS' => array( 'desc' => 'Shows a list of tag links this event belongs to.' ),
+							'#_RECURRINGDATERANGE' => array( 'desc' => 'Range of dates between the start/end of the recurring event pattern for an event recurrence, blank for non-recurrences.' ),
+							'#_RECURRINGPATTERN' => array( 'desc' => 'Describes the pattern of a recurring event when used on an event recurrence, blank for non-recurrences.' ),
+							'#_RECURRINGID' => array( 'desc' => 'The event ID of the recurring event template when displayed on a recurrence, blank for non-recurrences.' ),
 						)
 					),
 					'Date and Times' => array(
@@ -119,7 +123,7 @@ function em_docs_init($force_init = false){
 						'desc' => 'Events Manager allows extremely flexible date formatting by using <a href="http://www.php.net/manual/en/function.date.php">PHP date syntax format characters</a> along with placeholders.',
 						'placeholders' => array(
 							'# or #@' => array( 'desc' => 'Prepend <code>#</code> or <code>#@</code> before a valid PHP date syntax format character to show start and end date/time information respectively (e.g. <code>#F</code> will show the starting month name like "January", #@h shows the end hour).' ),
-							'#{x} or #@{x}' => array( 'desc' => 'You can also create a date format without prepending # to each character by wrapping a valid php date() format in <code>#{}</code> or <code>#@{}</code> (e.g. <code>#_{d/m/Y}</code>). If there is no end date (or is same as start date), the value is not shown. This is useful if you want to show event end dates only on events that are longer than one day, e.g. <code>#j #M #Y #@_{ \u\n\t\i\l j M Y}</code>.' ),
+							'#_{x} or #@_{x}' => array( 'desc' => 'You can also create a date format without prepending # to each character by wrapping a valid php date() format in <code>#_{}</code> or <code>#@_{}</code> (e.g. <code>#_{d/m/Y}</code>). If there is no end date (or is same as start date), the value is not shown. This is useful if you want to show event end dates only on events that are longer than one day, e.g. <code>#j #M #Y #@_{ \u\n\t\i\l j M Y}</code>.' ),
 						)
 					),
 					'Links/URLs' => array(

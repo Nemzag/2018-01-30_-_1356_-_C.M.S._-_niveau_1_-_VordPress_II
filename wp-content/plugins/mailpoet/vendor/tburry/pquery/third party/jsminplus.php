@@ -1,5 +1,8 @@
 <?php
 
+if (!defined('ABSPATH')) exit;
+
+
 /**
  * JSMinPlus version 1.4
  *

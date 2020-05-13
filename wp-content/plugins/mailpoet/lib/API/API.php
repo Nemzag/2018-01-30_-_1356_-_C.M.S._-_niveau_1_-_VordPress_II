@@ -2,20 +2,24 @@
 
 namespace MailPoet\API;
 
-use MailPoet\Config\AccessControl;
+if (!defined('ABSPATH')) exit;
 
-if(!defined('ABSPATH')) exit;
+
+use MailPoet\DI\ContainerWrapper;
+use MailPoetVendor\Symfony\Component\DependencyInjection\Exception\ServiceNotFoundException;
 
 class API {
-  static function JSON(AccessControl $access_control) {
-    return new \MailPoet\API\JSON\API($access_control);
-  }
-
-  static function MP($version) {
-    $api_class = sprintf('%s\MP\%s\API', __NAMESPACE__, $version);
-    if(class_exists($api_class)) {
-      return new $api_class();
+  /**
+   * @param string $version
+   * @return \MailPoet\API\MP\v1\API
+   * @throws \Exception
+   */
+  public static function MP($version) {
+    $apiClass = sprintf('%s\MP\%s\API', __NAMESPACE__, $version);
+    try {
+      return ContainerWrapper::getInstance()->get($apiClass);
+    } catch (ServiceNotFoundException $e) {
+      throw new \Exception(__('Invalid API version.', 'mailpoet'));
     }
-    throw new \Exception(__('Invalid API version.', 'mailpoet'));
   }
 }

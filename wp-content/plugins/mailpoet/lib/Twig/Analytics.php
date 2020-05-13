@@ -2,25 +2,44 @@
 
 namespace MailPoet\Twig;
 
-use MailPoet\Analytics\Reporter;
+if (!defined('ABSPATH')) exit;
+
+
 use MailPoet\Analytics\Analytics as AnalyticsGenerator;
+use MailPoet\Analytics\Reporter;
+use MailPoet\Settings\SettingsController;
+use MailPoet\WooCommerce\Helper as WooCommerceHelper;
+use MailPoetVendor\Twig\Extension\AbstractExtension;
+use MailPoetVendor\Twig\TwigFunction;
 
-if(!defined('ABSPATH')) exit;
-
-class Analytics extends \Twig_Extension {
+class Analytics extends AbstractExtension {
   public function getFunctions() {
-    $analytics = new AnalyticsGenerator(new Reporter());
-    return array(
-      new \Twig_SimpleFunction(
-        'get_analytics_data',
-        array($analytics, 'generateAnalytics'),
-        array('is_safe' => array('all'))
-      ),
-      new \Twig_SimpleFunction(
-        'is_analytics_enabled',
-        array($analytics, 'isEnabled'),
-        array('is_safe' => array('all'))
-      ),
+    $settings = SettingsController::getInstance();
+    $analytics = new AnalyticsGenerator(
+      new Reporter($settings, new WooCommerceHelper()),
+      $settings
     );
+    return [
+      new TwigFunction(
+        'get_analytics_data',
+        [$analytics, 'generateAnalytics'],
+        ['is_safe' => ['all']]
+      ),
+      new TwigFunction(
+        'is_analytics_enabled',
+        [$analytics, 'isEnabled'],
+        ['is_safe' => ['all']]
+      ),
+      new TwigFunction(
+        'get_analytics_public_id',
+        [$analytics, 'getPublicId'],
+        ['is_safe' => ['all']]
+      ),
+      new TwigFunction(
+        'is_analytics_public_id_new',
+        [$analytics, 'isPublicIdNew'],
+        ['is_safe' => ['all']]
+      ),
+    ];
   }
 }

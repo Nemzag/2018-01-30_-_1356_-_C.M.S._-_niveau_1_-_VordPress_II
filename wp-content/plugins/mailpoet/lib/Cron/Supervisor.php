@@ -1,38 +1,49 @@
 <?php
+
 namespace MailPoet\Cron;
 
-if(!defined('ABSPATH')) exit;
+if (!defined('ABSPATH')) exit;
+
 
 class Supervisor {
   public $daemon;
   public $token;
 
-  function __construct() {
-    $this->token = CronHelper::createToken();
+  /** @var CronHelper */
+  private $cronHelper;
+
+  public function __construct(CronHelper $cronHelper) {
+    $this->cronHelper = $cronHelper;
+  }
+
+  public function init() {
+    $this->token = $this->cronHelper->createToken();
     $this->daemon = $this->getDaemon();
   }
 
-  function checkDaemon() {
+  public function checkDaemon() {
     $daemon = $this->daemon;
-    $execution_timeout_exceeded =
-      (time() - (int)$daemon['updated_at']) >= CronHelper::DAEMON_EXECUTION_TIMEOUT;
-    if($execution_timeout_exceeded) {
-      CronHelper::restartDaemon($this->token);
+    $executionTimeoutExceeded =
+      (time() - (int)$daemon['updated_at']) >= $this->cronHelper->getDaemonExecutionTimeout();
+    $daemonIsInactive =
+      isset($daemon['status']) && $daemon['status'] === CronHelper::DAEMON_STATUS_INACTIVE;
+    if ($executionTimeoutExceeded || $daemonIsInactive) {
+      $this->cronHelper->restartDaemon($this->token);
       return $this->runDaemon();
     }
     return $daemon;
   }
 
-  function runDaemon() {
-    CronHelper::accessDaemon($this->token);
-    $daemon = CronHelper::getDaemon();
+  public function runDaemon() {
+    $this->cronHelper->accessDaemon($this->token);
+    $daemon = $this->cronHelper->getDaemon();
     return $daemon;
   }
 
-  function getDaemon() {
-    $daemon = CronHelper::getDaemon();
-    if(!$daemon) {
-      CronHelper::createDaemon($this->token);
+  public function getDaemon() {
+    $daemon = $this->cronHelper->getDaemon();
+    if (!$daemon) {
+      $this->cronHelper->createDaemon($this->token);
       return $this->runDaemon();
     }
     return $daemon;

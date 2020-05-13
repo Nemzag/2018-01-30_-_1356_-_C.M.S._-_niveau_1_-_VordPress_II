@@ -1,5 +1,11 @@
 <?php
+
 namespace MailPoet\WP;
+
+if (!defined('ABSPATH')) exit;
+
+
+use MailPoet\WP\Functions as WPFunctions;
 
 class Notice {
 
@@ -10,42 +16,60 @@ class Notice {
 
   private $type;
   private $message;
+  private $classes;
+  private $dataNoticeName;
+  private $renderInParagraph;
 
-  function __construct($type, $message) {
+  public function __construct($type, $message, $classes = '', $dataNoticeName = '', $renderInParagraph = true) {
     $this->type = $type;
     $this->message = $message;
+    $this->classes = $classes;
+    $this->dataNoticeName = $dataNoticeName;
+    $this->renderInParagraph = $renderInParagraph;
   }
 
-  static function displayError($message) {
-    $message = sprintf(
-      "<b>%s </b> %s",
-      __('MailPoet Error:', 'mailpoet'),
-      $message
-    );
-    self::createNotice(self::TYPE_ERROR, $message);
+  public function getMessage() {
+    return $this->message;
   }
 
-  static function displayWarning($message) {
-    self::createNotice(self::TYPE_WARNING, $message);
+  public static function displayError($message, $classes = '', $dataNoticeName = '', $renderInParagraph = true, $showErrorTitle = true) {
+    if ($showErrorTitle) {
+      $message = sprintf(
+        "<b>%s </b> %s",
+        WPFunctions::get()->__('MailPoet Error:', 'mailpoet'),
+        $message
+      );
+    }
+    self::createNotice(self::TYPE_ERROR, $message, $classes, $dataNoticeName, $renderInParagraph);
   }
 
-  static function displaySuccess($message) {
-    self::createNotice(self::TYPE_SUCCESS, $message);
+  public static function displayWarning($message, $classes = '', $dataNoticeName = '', $renderInParagraph = true) {
+    return self::createNotice(self::TYPE_WARNING, $message, $classes, $dataNoticeName, $renderInParagraph);
   }
 
-  static function displayInfo($message) {
-    self::createNotice(self::TYPE_INFO, $message);
+  public static function displaySuccess($message, $classes = '', $dataNoticeName = '', $renderInParagraph = true) {
+    self::createNotice(self::TYPE_SUCCESS, $message, $classes, $dataNoticeName, $renderInParagraph);
   }
 
-  protected static function createNotice($type, $message) {
-    $notice = new Notice($type, $message);
-    add_action('admin_notices', array($notice, 'displayWPNotice'));
+  public static function displayInfo($message, $classes = '', $dataNoticeName = '', $renderInParagraph = true) {
+    self::createNotice(self::TYPE_INFO, $message, $classes, $dataNoticeName, $renderInParagraph);
   }
 
-  function displayWPNotice() {
-    $class = sprintf('notice notice-%s mailpoet_notice_server', $this->type);
+  protected static function createNotice($type, $message, $classes, $dataNoticeName, $renderInParagraph) {
+    $notice = new Notice($type, $message, $classes, $dataNoticeName, $renderInParagraph);
+    WPFunctions::get()->addAction('admin_notices', [$notice, 'displayWPNotice']);
+    return $notice;
+  }
+
+  public function displayWPNotice() {
+    $class = sprintf('notice notice-%s mailpoet_notice_server %s', $this->type, $this->classes);
     $message = nl2br($this->message);
+    $dataNoticeName = !empty($this->dataNoticeName) ? sprintf('data-notice="%s"', $this->dataNoticeName) : '';
 
-    printf('<div class="%1$s"><p>%2$s</p></div>', $class, $message);
+    if ($this->renderInParagraph) {
+      printf('<div class="%1$s" %3$s><p>%2$s</p></div>', $class, $message, $dataNoticeName);
+    } else {
+      printf('<div class="%1$s" %3$s>%2$s</div>', $class, $message, $dataNoticeName);
+    }
   }
 }

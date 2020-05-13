@@ -1,7 +1,11 @@
 <?php
+
 namespace MailPoet\API\JSON;
 
-if(!defined('ABSPATH')) exit;
+if (!defined('ABSPATH')) exit;
+
+
+use MailPoet\WP\Functions as WPFunctions;
 
 abstract class Response {
   const STATUS_OK = 200;
@@ -9,35 +13,36 @@ abstract class Response {
   const STATUS_UNAUTHORIZED = 401;
   const STATUS_FORBIDDEN = 403;
   const STATUS_NOT_FOUND = 404;
+  const STATUS_CONFLICT = 409;
   const STATUS_UNKNOWN = 500;
 
   public $status;
   public $meta;
 
-  function __construct($status, $meta = array()) {
+  public function __construct($status, $meta = []) {
     $this->status = $status;
     $this->meta = $meta;
   }
 
-  function send() {
-    status_header($this->status);
+  public function send() {
+    WPFunctions::get()->statusHeader($this->status);
 
     $data = $this->getData();
-    $response = array();
+    $response = [];
 
-    if(!empty($this->meta)) {
+    if (!empty($this->meta)) {
       $response['meta'] = $this->meta;
     }
-    if($data !== null) {
+    if ($data !== null) {
       $response = array_merge($response, $data);
     }
 
-    if(!empty($response)) {
-      @header('Content-Type: application/json; charset='.get_option('blog_charset'));
-      echo wp_json_encode($response);
+    if (!empty($response)) {
+      @header('Content-Type: application/json; charset=' . get_option('blog_charset'));
+      echo WPFunctions::get()->wpJsonEncode($response);
     }
     die();
   }
 
-  abstract function getData();
+  public abstract function getData();
 }

@@ -24,7 +24,7 @@ msgstr "Vous allez supprimer les sites suivants :"
 msgid "User could not be added to this site."
 msgstr "L’utilisateur ne peut pas être ajouté à ce site."
 
-#: wp-admin/network/site-new.php:250
+#: wp-admin/network/site-new.php:252
 msgid "The username and a link to set the password will be mailed to this email address."
 msgstr "Le nom de l’utilisateur et un lien pour mettre en place son mot de passe seront envoyés à cette adresse de messagerie."
 
@@ -543,7 +543,7 @@ msgstr "Ces thèmes peuvent être actifs sur d&rsquo;autres site de ce réseau."
 msgid "You are about to remove the following themes:"
 msgstr "Vous êtes sur le point d&rsquo;enlever les thèmes suivants&nbsp;:"
 
-#: wp-admin/network/settings.php:418
+#: wp-admin/network/settings.php:420
 msgid "Enable menus"
 msgstr "Activer les menus"
 
@@ -981,10 +981,6 @@ msgstr "Votre adresse de messagerie."
 msgid "An existing WordPress network was detected."
 msgstr "Un réseau WordPress pré-existant a été détecté."
 
-#: wp-admin/network.php:60
-msgid "Choose subdomains or subdirectories; this can only be switched afterwards by reconfiguring your installation. Fill out the network details, and click Install. If this does not work, you may have to add a wildcard DNS record (for subdomains) or change to another setting in Permalinks (for subdirectories)."
-msgstr "Faites le choix entre sous-domaines ou sous-dossiers. Une fois l’installation configurée, vous ne pourrez pas revenir en arrière sans recommencer à zéro. Saisissez tous les détails, et cliquez sur «&nbsp;Installer&nbsp;». Si cela ne marche pas, vous devrez sans doute ajouter une entrée de sous-domaine générique (wildcard) dans vos enregistrements DNS, ou passer à un réglage différent pour vos permaliens (si en mode sous-dossiers)."
-
 #: wp-admin/includes/network.php:295
 msgid "Because your installation is not new, the sites in your WordPress network must use sub-domains."
 msgstr "Comme votre installation de WordPress n’est pas récente, les sites de votre réseau doivent utiliser des sous-domaines."
@@ -997,6 +993,10 @@ msgstr "Comme votre installation de WordPress se trouve dans un répertoire, les
 #: wp-admin/includes/network.php:296
 msgid "The main site in a sub-directory installation will need to use a modified permalink structure, potentially breaking existing links."
 msgstr "Le site principal d’une installation en sous-répertoire devra utiliser une structure de permaliens modifiée, ce qui pourrait potentiellement casser vos liens existants."
+
+#: wp-admin/network.php:60
+msgid "Choose subdomains or subdirectories; this can only be switched afterwards by reconfiguring your installation. Fill out the network details, and click Install. If this does not work, you may have to add a wildcard DNS record (for subdomains) or change to another setting in Permalinks (for subdirectories)."
+msgstr "Faites le choix entre sous-domaines ou sous-dossiers. Une fois l’installation configurée, vous ne pourrez pas revenir en arrière sans recommencer à zéro. Saisissez tous les détails, et cliquez sur «&nbsp;Installer&nbsp;». Si cela ne marche pas, vous devrez sans doute ajouter une entrée de sous-domaine générique (wildcard) dans vos enregistrements DNS, ou passer à un réglage différent pour vos permaliens (si en mode sous-dossiers)."
 
 #: wp-admin/network/users.php:70
 msgid "Warning! User cannot be modified. The user %s is a network administrator."
@@ -1219,7 +1219,7 @@ msgstr "La création de sites et d’utilisateurs est autorisée."
 msgid "Logged in users may register new sites"
 msgstr "Les utilisateurs connectés peuvent créer de nouveaux sites."
 
-#: wp-admin/network/settings.php:396
+#: wp-admin/network/settings.php:398
 msgid "Enable administration menus"
 msgstr "Activer les menus d&rsquo;administration"
 
@@ -1348,14 +1348,14 @@ msgstr "Taille maximale des fichiers"
 msgid "Default Language"
 msgstr "Langue par défaut"
 
-#: wp-admin/network/site-new.php:262
+#: wp-admin/network/site-new.php:264
 msgid "Add Site"
 msgstr "Ajouter un site"
 
-#: wp-admin/network/site-new.php:246
+#: wp-admin/network/site-new.php:248
 msgid "Admin Email"
 msgstr "Adresse de contact de l&rsquo;administrateur"
 
-#: wp-admin/network/site-new.php:250
+#: wp-admin/network/site-new.php:252
 msgid "A new user will be created if the above email address is not in the database."
 msgstr "Un nouvel utilisateur sera créé si l&rsquo;adresse de contact n&rsquo;existe pas dans la base de données."

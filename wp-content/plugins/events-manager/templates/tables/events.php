@@ -63,7 +63,9 @@
 						*/ ?>
 						<th><?php _e ( 'Name', 'events-manager'); ?></th>
 						<th>&nbsp;</th>
+						<?php if( get_option('dbem_locations_enabled') ): ?>
 						<th><?php _e ( 'Location', 'events-manager'); ?></th>
+						<?php endif; ?>
 						<th colspan="2"><?php _e ( 'Date and time', 'events-manager'); ?></th>
 					</tr>
 				</thead>
@@ -74,14 +76,8 @@
 						/* @var $EM_Event EM_Event */
 						$rowno++;
 						$class = ($rowno % 2) ? 'alternate' : '';
-						// FIXME set to american						
-						$localised_start_date = date_i18n(get_option('dbem_date_format'), $EM_Event->start);
-						$localised_end_date = date_i18n(get_option('dbem_date_format'), $EM_Event->end);
-						$style = "";
-						$today = current_time('timestamp');
-						$location_summary = "<b>" . esc_html($EM_Event->get_location()->location_name) . "</b><br/>" . esc_html($EM_Event->get_location()->location_address) . " - " . esc_html($EM_Event->get_location()->location_town);
 						
-						if ($EM_Event->start < $today && $EM_Event->end < $today){						
+						if( $EM_Event->start()->getTimestamp() < time() && $EM_Event->end()->getTimestamp() < time() ){
 							$class .= " past";
 						}
 						//Check pending approval events
@@ -89,7 +85,7 @@
 							$class .= " pending";
 						}					
 						?>
-						<tr class="event <?php echo trim($class); ?>" <?php echo $style; ?> id="event_<?php echo $EM_Event->event_id ?>">
+						<tr class="event <?php echo trim($class); ?>" id="event_<?php echo $EM_Event->event_id ?>">
 							<?php /*
 							<td>
 								<input type='checkbox' class='row-selector' value='<?php echo $EM_Event->event_id; ?>' name='events[]' />
@@ -121,21 +117,15 @@
 									<strong>+</strong>
 								</a>
 							</td>
+							<?php if( get_option('dbem_locations_enabled') ): ?>
 							<td>
-								<?php echo $location_summary; ?>
+								<?php echo "<b>" . esc_html($EM_Event->get_location()->location_name) . "</b><br/>" . esc_html($EM_Event->get_location()->location_address) . " - " . esc_html($EM_Event->get_location()->location_town); ?>
 							</td>
-					
+							<?php endif; ?>
 							<td>
-								<?php echo $localised_start_date; ?>
-								<?php echo ($localised_end_date != $localised_start_date) ? " - $localised_end_date":'' ?>
+								<?php echo $EM_Event->output_dates(); ?>
 								<br />
-								<?php
-									if(!$EM_Event->event_all_day){
-										echo date_i18n(get_option('time_format'), $EM_Event->start) . " - " . date_i18n(get_option('time_format'), $EM_Event->end);
-									}else{
-										echo get_option('dbem_event_all_day_message');
-									}
-								?>
+								<?php echo $EM_Event->output_times(); ?>
 							</td>
 							<td>
 								<?php 

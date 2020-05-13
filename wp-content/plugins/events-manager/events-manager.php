@@ -1,7 +1,7 @@
 <?php
 /*
 Plugin Name: Events Manager
-Version: 5.8.1.3
+Version: 5.9.7.3
 Plugin URI: http://wp-events-plugin.com
 Description: Event registration and booking management for WordPress. Recurring events, locations, google maps, rss, ical, booking registration and more!
 Author: Marcus Sykes
@@ -10,7 +10,7 @@ Text Domain: events-manager
 */
 
 /*
-Copyright (c) 2017, Marcus Sykes
+Copyright (c) 2020, Marcus Sykes
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -28,8 +28,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
 // Setting constants
-define('EM_VERSION', 5.8); //self expanatory
-define('EM_PRO_MIN_VERSION', 2.392); //self expanatory
+define('EM_VERSION', 5.973); //self expanatory
+define('EM_PRO_MIN_VERSION', 2.6712); //self expanatory
 define('EM_PRO_MIN_VERSION_CRITICAL', 2.377); //self expanatory
 define('EM_DIR', dirname( __FILE__ )); //an absolute path to this directory
 define('EM_DIR_URI', trailingslashit(plugins_url('',__FILE__))); //an absolute path to this directory
@@ -56,7 +56,7 @@ if( !defined('WP_DEBUG') && get_option('dbem_wp_debug') ){
 function dbem_debug_mode(){
 	if( !empty($_REQUEST['dbem_debug_off']) ){
 		update_option('dbem_debug',0);
-		wp_redirect($_SERVER['HTTP_REFERER']);
+		wp_safe_redirect($_SERVER['HTTP_REFERER']);
 	}
 	if( current_user_can('activate_plugins') ){
 		include_once('em-debug.php');
@@ -66,7 +66,9 @@ function dbem_debug_mode(){
 
 // INCLUDES
 //Base classes
+include('classes/em-options.php');
 include('classes/em-object.php');
+include('classes/em-datetime.php');
 include('classes/em-taxonomy-term.php');
 include('classes/em-taxonomy-terms.php');
 include('classes/em-taxonomy-frontend.php');
@@ -80,6 +82,7 @@ include("em-functions.php");
 include("em-ical.php");
 include("em-shortcode.php");
 include("em-template-tags.php");
+include("em-data-privacy.php");
 include("multilingual/em-ml.php");
 //Widgets
 include("widgets/em-events.php");
@@ -115,11 +118,14 @@ include('classes/em-tickets-bookings.php');
 include('classes/em-tickets.php');
 //Admin Files
 if( is_admin() ){
+	include('classes/em-admin-notice.php');
+	include('classes/em-admin-notices.php');
 	include('admin/em-admin.php');
 	include('admin/em-bookings.php');
 	include('admin/em-docs.php');
 	include('admin/em-help.php');
 	include('admin/em-options.php');
+	include('admin/em-data-privacy.php');
 	if( is_multisite() ){
 		include('admin/em-ms-options.php');
 	}
@@ -439,8 +445,6 @@ function em_plugins_loaded(){
 		/* Upload Capabilities */
 		'upload_event_images' => __('You do not have permission to upload images','events-manager')
 	));
-	// LOCALIZATION
-	load_plugin_textdomain('events-manager', false, dirname( plugin_basename( __FILE__ ) ).'/includes/langs');
 	//WPFC Integration
 	if( defined('WPFC_VERSION') ){
 		function load_em_wpfc_plugin(){
@@ -485,6 +489,8 @@ function em_init(){
 	}
 	//add custom functions.php file
 	locate_template('plugins/events-manager/functions.php', true);
+	//fire a loaded hook, most plugins should consider going through here to load anything EM related
+	do_action('events_manager_loaded');
 }
 add_filter('init','em_init',1);
 
@@ -499,7 +505,7 @@ function em_load_event(){
 	if( !defined('EM_LOADED') ){
 		$EM_Recurrences = array();
 		if( isset( $_REQUEST['event_id'] ) && is_numeric($_REQUEST['event_id']) && !is_object($EM_Event) ){
-			$EM_Event = new EM_Event($_REQUEST['event_id']);
+			$EM_Event = new EM_Event( absint($_REQUEST['event_id']) );
 		}elseif( isset($_REQUEST['post']) && (get_post_type($_REQUEST['post']) == 'event' || get_post_type($_REQUEST['post']) == 'event-recurring') ){
 			$EM_Event = em_get_event($_REQUEST['post'], 'post_id');
 		}elseif ( !empty($_REQUEST['event_slug']) && EM_MS_GLOBAL && is_main_site() && !get_site_option('dbem_ms_global_events_links')) {
@@ -514,7 +520,7 @@ function em_load_event(){
 			$EM_Event = em_get_event($event_id);
 		}
 		if( isset($_REQUEST['location_id']) && is_numeric($_REQUEST['location_id']) && !is_object($EM_Location) ){
-			$EM_Location = new EM_Location($_REQUEST['location_id']);
+			$EM_Location = new EM_Location( absint($_REQUEST['location_id']) );
 		}elseif( isset($_REQUEST['post']) && get_post_type($_REQUEST['post']) == 'location' ){
 			$EM_Location = em_get_location($_REQUEST['post'], 'post_id');
 		}elseif ( !empty($_REQUEST['location_slug']) && EM_MS_GLOBAL && is_main_site() && !get_site_option('dbem_ms_global_locations_links')) {
@@ -531,21 +537,21 @@ function em_load_event(){
 		if( is_user_logged_in() || (!empty($_REQUEST['person_id']) && is_numeric($_REQUEST['person_id'])) ){
 			//make the request id take priority, this shouldn't make it into unwanted objects if they use theobj::get_person().
 			if( !empty($_REQUEST['person_id']) ){
-				$EM_Person = new EM_Person( $_REQUEST['person_id'] );
+				$EM_Person = new EM_Person( absint($_REQUEST['person_id']) );
 			}else{
 				$EM_Person = new EM_Person( get_current_user_id() );
 			}
 		}
 		if( isset($_REQUEST['booking_id']) && is_numeric($_REQUEST['booking_id']) && !is_object($_REQUEST['booking_id']) ){
-			$EM_Booking = em_get_booking($_REQUEST['booking_id']);
+			$EM_Booking = em_get_booking( absint($_REQUEST['booking_id']) );
 		}
 		if( isset($_REQUEST['category_id']) && is_numeric($_REQUEST['category_id']) && !is_object($_REQUEST['category_id']) ){
-			$EM_Category = new EM_Category($_REQUEST['category_id']);
+			$EM_Category = new EM_Category( absint($_REQUEST['category_id']) );
 		}elseif( isset($_REQUEST['category_slug']) && !is_object($EM_Category) ){
 			$EM_Category = new EM_Category( $_REQUEST['category_slug'] );
 		}
 		if( isset($_REQUEST['ticket_id']) && is_numeric($_REQUEST['ticket_id']) && !is_object($_REQUEST['ticket_id']) ){
-			$EM_Ticket = new EM_Ticket($_REQUEST['ticket_id']);
+			$EM_Ticket = new EM_Ticket( absint($_REQUEST['ticket_id']) );
 		}
 		define('EM_LOADED',true);
 	}
@@ -633,7 +639,8 @@ function em_locate_template( $template_name, $load=false, $the_args = array() ) 
 	//First we check if there are overriding tempates in the child or parent theme
 	$located = locate_template(array('plugins/events-manager/'.$template_name));
 	if( !$located ){
-		if ( file_exists(EM_DIR.'/templates/'.$template_name) ) {
+		$located = apply_filters('em_locate_template_default', $located, $template_name, $load, $the_args);
+		if ( !$located && file_exists(EM_DIR.'/templates/'.$template_name) ) {
 			$located = EM_DIR.'/templates/'.$template_name;
 		}
 	}
@@ -710,7 +717,7 @@ add_action ( 'template_redirect', 'em_rss' );
  */
 function em_modified_monitor($result){
 	if($result){
-	    update_option('em_last_modified', current_time('timestamp', true));
+	    update_option('em_last_modified', time());
 	}
 	return $result;
 }

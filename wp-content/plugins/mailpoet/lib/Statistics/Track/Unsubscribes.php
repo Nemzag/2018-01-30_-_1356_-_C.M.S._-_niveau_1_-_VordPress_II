@@ -1,22 +1,48 @@
 <?php
+
 namespace MailPoet\Statistics\Track;
 
-use MailPoet\Models\StatisticsUnsubscribes;
+if (!defined('ABSPATH')) exit;
 
-if(!defined('ABSPATH')) exit;
+
+use MailPoet\Entities\StatisticsUnsubscribeEntity;
+use MailPoet\Newsletter\Sending\SendingQueuesRepository;
+use MailPoet\Statistics\StatisticsUnsubscribesRepository;
 
 class Unsubscribes {
-  function track($newsletter_id, $subscriber_id, $queue_id) {
-    $statistics = StatisticsUnsubscribes::where('subscriber_id', $subscriber_id)
-      ->where('newsletter_id', $newsletter_id)
-      ->where('queue_id', $queue_id)
-      ->findOne();
-    if(!$statistics) {
-      $statistics = StatisticsUnsubscribes::create();
-      $statistics->newsletter_id = $newsletter_id;
-      $statistics->subscriber_id = $subscriber_id;
-      $statistics->queue_id = $queue_id;
-      $statistics->save();
+  /** @var SendingQueuesRepository */
+  private $sendingQueuesRepository;
+
+  /** @var StatisticsUnsubscribesRepository */
+  private $statisticsUnsubscribesRepository;
+
+  public function __construct(
+    SendingQueuesRepository $sendingQueuesRepository,
+    StatisticsUnsubscribesRepository $statisticsUnsubscribesRepository
+  ) {
+    $this->sendingQueuesRepository = $sendingQueuesRepository;
+    $this->statisticsUnsubscribesRepository = $statisticsUnsubscribesRepository;
+  }
+
+  public function track(int $subscriberId, int $queueId) {
+    $queue = $this->sendingQueuesRepository->findOneById($queueId);
+    if ($queue === null) {
+      return;
+    }
+    $newsletter = $queue->getNewsletter();
+    if ($newsletter === null) {
+      return;
+    }
+    $statistics = $this->statisticsUnsubscribesRepository->findOneBy([
+      'queue' => $queue,
+      'newsletter' => $newsletter,
+      'subscriberId' => $subscriberId,
+    ]);
+
+    if (!$statistics) {
+      $statistics = new StatisticsUnsubscribeEntity($newsletter, $queue, $subscriberId);
+      $this->statisticsUnsubscribesRepository->persist($statistics);
+      $this->statisticsUnsubscribesRepository->flush();
     }
   }
 }

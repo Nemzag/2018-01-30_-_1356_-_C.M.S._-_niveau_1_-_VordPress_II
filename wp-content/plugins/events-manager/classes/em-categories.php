@@ -7,6 +7,7 @@ class EM_Categories extends EM_Taxonomy_Terms {
 	protected $meta_key = 'event-category';
 	protected $terms_name = 'categories';
 	protected $term_class = 'EM_Category';
+	protected $ajax_search_action = 'search_cats';
 	
 	/**
 	 * Creates an EM_Categories instance, currently accepts an EM_Event object (gets all Categories for that event) or array of any EM_Category objects, which can be manipulated in bulk with helper functions.
@@ -32,14 +33,14 @@ class EM_Categories extends EM_Taxonomy_Terms {
 	
 	/**
 	 * Legacy overload for use of empty($this->categories)
-	 * @param string $var_name
+	 * @param string $prop
 	 * @return boolean
 	 */
-	function __isset( $var_name ){
-		if( $var_name == 'categories' ){
+	function __isset( $prop ){
+		if( $prop == 'categories' ){
 			return !empty($this->terms);
 		}
-		return !empty($this->$var_name);
+		return parent::__isset( $prop );
 	}
 	
 	//Functions we won't need when PHP 5.3 minimum allows for use of LSB

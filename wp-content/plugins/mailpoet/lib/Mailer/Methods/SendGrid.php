@@ -2,82 +2,96 @@
 
 namespace MailPoet\Mailer\Methods;
 
-use MailPoet\Mailer\Mailer;
-use MailPoet\WP\Functions as WPFunctions;
+if (!defined('ABSPATH')) exit;
 
-if(!defined('ABSPATH')) exit;
+
+use MailPoet\Mailer\Mailer;
+use MailPoet\Mailer\Methods\Common\BlacklistCheck;
+use MailPoet\Mailer\Methods\ErrorMappers\SendGridMapper;
+use MailPoet\WP\Functions as WPFunctions;
 
 class SendGrid {
   public $url = 'https://api.sendgrid.com/api/mail.send.json';
-  public $api_key;
+  public $apiKey;
   public $sender;
-  public $reply_to;
+  public $replyTo;
 
-  function __construct($api_key, $sender, $reply_to) {
-    $this->api_key = $api_key;
+  /** @var SendGridMapper */
+  private $errorMapper;
+
+  /** @var BlacklistCheck */
+  private $blacklist;
+
+  private $wp;
+
+  public function __construct($apiKey, $sender, $replyTo, SendGridMapper $errorMapper) {
+    $this->apiKey = $apiKey;
     $this->sender = $sender;
-    $this->reply_to = $reply_to;
+    $this->replyTo = $replyTo;
+    $this->errorMapper = $errorMapper;
+    $this->wp = new WPFunctions();
+    $this->blacklist = new BlacklistCheck();
   }
 
-  function send($newsletter, $subscriber, $extra_params = array()) {
-    $result = WPFunctions::wpRemotePost(
-      $this->url,
-      $this->request($newsletter, $subscriber, $extra_params)
-    );
-    if(is_wp_error($result)) {
-      return Mailer::formatMailerConnectionErrorResult($result->get_error_message());
+  public function send($newsletter, $subscriber, $extraParams = []) {
+    if ($this->blacklist->isBlacklisted($subscriber)) {
+      $error = $this->errorMapper->getBlacklistError($subscriber);
+      return Mailer::formatMailerErrorResult($error);
     }
-    if(WPFunctions::wpRemoteRetrieveResponseCode($result) !== 200) {
+    $result = $this->wp->wpRemotePost(
+      $this->url,
+      $this->request($newsletter, $subscriber, $extraParams)
+    );
+    if (is_wp_error($result)) {
+      $error = $this->errorMapper->getConnectionError($result->get_error_message());
+      return Mailer::formatMailerErrorResult($error);
+    }
+    if ($this->wp->wpRemoteRetrieveResponseCode($result) !== 200) {
       $response = json_decode($result['body'], true);
-      $response = (!empty($response['errors'][0])) ?
-        $response['errors'][0] :
-        sprintf(__('%s has returned an unknown error.', 'mailpoet'), Mailer::METHOD_SENDGRID);
-      if(empty($extra_params['test_email'])) {
-        $response .= sprintf(' %s: %s', __('Unprocessed subscriber', 'mailpoet'), $subscriber);
-      }
-      return Mailer::formatMailerSendErrorResult($response);
+      $error = $this->errorMapper->getErrorFromResponse($response, $subscriber);
+      return Mailer::formatMailerErrorResult($error);
     }
     return Mailer::formatMailerSendSuccessResult();
   }
 
-  function getBody($newsletter, $subscriber, $extra_params = array()) {
-    $body = array(
+  public function getBody($newsletter, $subscriber, $extraParams = []) {
+    $body = [
       'to' => $subscriber,
       'from' => $this->sender['from_email'],
       'fromname' => $this->sender['from_name'],
-      'replyto' => $this->reply_to['reply_to_email'],
-      'subject' => $newsletter['subject']
-    );
-    $headers = array();
-    if(!empty($extra_params['unsubscribe_url'])) {
-      $headers['List-Unsubscribe'] = '<' . $extra_params['unsubscribe_url'] . '>';
+      'replyto' => $this->replyTo['reply_to_email'],
+      'subject' => $newsletter['subject'],
+    ];
+    $headers = [];
+    if (!empty($extraParams['unsubscribe_url'])) {
+      $headers['List-Unsubscribe'] = '<' . $extraParams['unsubscribe_url'] . '>';
     }
-    if($headers) {
+    if ($headers) {
       $body['headers'] = json_encode($headers);
     }
-    if(!empty($newsletter['body']['html'])) {
+    if (!empty($newsletter['body']['html'])) {
       $body['html'] = $newsletter['body']['html'];
     }
-    if(!empty($newsletter['body']['text'])) {
+    if (!empty($newsletter['body']['text'])) {
       $body['text'] = $newsletter['body']['text'];
     }
     return $body;
   }
 
-  function auth() {
-    return 'Bearer ' . $this->api_key;
+  public function auth() {
+    return 'Bearer ' . $this->apiKey;
   }
 
-  function request($newsletter, $subscriber, $extra_params = array()) {
-    $body = $this->getBody($newsletter, $subscriber, $extra_params);
-    return array(
+  public function request($newsletter, $subscriber, $extraParams = []) {
+    $body = $this->getBody($newsletter, $subscriber, $extraParams);
+    return [
       'timeout' => 10,
       'httpversion' => '1.1',
       'method' => 'POST',
-      'headers' => array(
-        'Authorization' => $this->auth()
-      ),
-      'body' => http_build_query($body, null, '&')
-    );
+      'headers' => [
+        'Authorization' => $this->auth(),
+      ],
+      'body' => http_build_query($body, null, '&'),
+    ];
   }
 }

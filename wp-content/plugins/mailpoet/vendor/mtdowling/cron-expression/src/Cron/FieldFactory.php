@@ -2,6 +2,9 @@
 
 namespace Cron;
 
+if (!defined('ABSPATH')) exit;
+
+
 use InvalidArgumentException;
 
 /**

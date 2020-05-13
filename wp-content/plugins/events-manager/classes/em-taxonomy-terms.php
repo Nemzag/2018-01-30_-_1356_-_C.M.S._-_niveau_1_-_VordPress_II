@@ -1,11 +1,16 @@
 <?php
-class EM_Taxonomy_Terms extends EM_Object implements Iterator{
+class EM_Taxonomy_Terms extends EM_Object implements Iterator, Countable{
 
 	protected $is_ms_global = false;
 	protected $meta_key = 'event-taxonomy';
 	protected $taxonomy = 'event-taxonomy';
 	protected $terms_name = 'taxonomies';
 	protected $term_class = 'EM_Taxonomy';
+	/**
+	 * String representing the search action used in AJAX searches which will be available in child function when PHP 5.3 brings us LSB
+	 * @var string
+	 */
+	protected $ajax_search_action = 'search_taxonomy';
 	
 	/**
 	 * Blank instance of this class used in the static functions until PHP 5.3 brings us LSB
@@ -17,17 +22,17 @@ class EM_Taxonomy_Terms extends EM_Object implements Iterator{
 	 * Array of EM_Taxonomy_Term child objects for a specific event
 	 * @var array
 	 */
-	var $terms = array();
+	public $terms = array();
 	/**
 	 * Event ID of this set of taxonomy terms
 	 * @var int
 	 */
-	var $event_id;
+	public $event_id;
 	/**
 	 * Post ID of this set of taxonomy terms
 	 * @var int
 	 */
-	var $post_id;
+	public $post_id;
 	
 	/**
 	 * Creates an EM_Taxonomy_Terms instance, currently accepts an EM_Event object (gets all Taxonomy Terms for that event) or array of any EM_Taxonomy_Term objects, which can be manipulated in bulk with helper functions.
@@ -88,14 +93,16 @@ class EM_Taxonomy_Terms extends EM_Object implements Iterator{
 	}
 	
 	public function save(){
-		$term_slugs = array();
-		foreach($this->terms as $EM_Taxonomy_Term){
-			/* @var $EM_Taxonomy_Term EM_Taxonomy_Term */
-			if( !empty($EM_Taxonomy_Term->slug) ) $term_slugs[] = $EM_Taxonomy_Term->slug; //save of taxonomy will soft-fail if slug is empty
-		}
-		if( count($term_slugs) == 0 && get_option('dbem_default_'.$this->singular) > 0 ){
-			$default_term = get_term_by('id',get_option('dbem_default_'.$this->singular), $this->taxonomy);
-			if($default_term) $term_slugs[] = $default_term->slug;
+		if( empty($this->terms) ){
+			$EM_Taxonomy_Term = new $this->term_class();
+			$opt = 'dbem_default_'.$EM_Taxonomy_Term->option_name;
+			$default_category = EM_MS_GLOBAL && $this->is_ms_global ? get_blog_option( get_current_site()->blog_id, $opt ) : get_option($opt);
+			if( $default_category > 0 ){
+				$EM_Taxonomy_Term = new $this->term_class($default_category);
+				if( !empty($EM_Taxonomy_Term->slug) ){
+					$this->terms[] = $EM_Taxonomy_Term;
+				}
+			}
 		}
 		if( is_multisite() && $this->is_ms_global ){
 			//In MS Global mode, we also save taxonomy meta information for global lookups
@@ -104,10 +111,10 @@ class EM_Taxonomy_Terms extends EM_Object implements Iterator{
 				$this->save_index();
 			}
 			if( !EM_MS_GLOBAL || is_main_site() ){
-				wp_set_object_terms($this->post_id, $term_slugs, $this->taxonomy);
+				wp_set_object_terms($this->post_id, $this->get_slugs(), $this->taxonomy);
 			}
 		}else{
-			wp_set_object_terms($this->post_id, $term_slugs, $this->taxonomy);
+			wp_set_object_terms($this->post_id, $this->get_slugs(), $this->taxonomy);
 		}
 		do_action('em_'. $this->terms_name .'_save', $this);
 	}
@@ -148,6 +155,14 @@ class EM_Taxonomy_Terms extends EM_Object implements Iterator{
 			}
 		}
 		return $ids;
+	}
+	
+	public function get_slugs(){
+		$term_slugs = array();
+		foreach( $this->terms as $EM_Taxonomy_Term ){ /* @var EM_Taxonomy_Term $EM_Taxonomy_Term */
+			$term_slugs[] = $EM_Taxonomy_Term->slug;
+		}
+		return $term_slugs;
 	}
 	
 	/**
@@ -256,8 +271,9 @@ class EM_Taxonomy_Terms extends EM_Object implements Iterator{
 		return apply_filters('em_'. self::$instance->terms_name .'_output', $output, $terms, $args);		
 	}
 	
-	public static function get_pagination_links($args, $count, $search_action = 'search_cats', $default_args = array()){
+	public static function get_pagination_links($args, $count, $search_action = false, $default_args = array()){
 		//get default args if we're in a search, supply to parent since we can't depend on late static binding until WP requires PHP 5.3 or later
+		if( $search_action === false ) $search_action = self::$instance->ajax_search_action;
 		if( empty($default_args) && (!empty($args['ajax']) || !empty($_REQUEST['action']) && $_REQUEST['action'] == $search_action) ){
 			$default_args = self::get_default_search();
 			$default_args['limit'] = get_option('dbem_'. self::$instance->terms_name .'_default_limit');
@@ -319,5 +335,8 @@ class EM_Taxonomy_Terms extends EM_Object implements Iterator{
         $key = key($this->terms);
         $var = ($key !== NULL && $key !== FALSE);
         return $var;
+    }
+    public function count(){
+    	return count($this->terms);
     }
 }

@@ -20,13 +20,15 @@ class EM_Events extends EM_Object {
 	 */
 	public static $num_rows_found;
 	
+	protected static $context = 'event';
+	
 	/**
 	 * Returns an array of EM_Events that match the given specs in the argument, or returns a list of future evetnts in future 
 	 * (see EM_Events::get_default_search() ) for explanation of possible search array values. You can also supply a numeric array
 	 * containing the ids of the events you'd like to obtain 
 	 * 
 	 * @param array $args
-	 * @return EM_Event array()
+	 * @return EM_Event[]
 	 */
 	public static function get( $args = array(), $count=false ) {
 		global $wpdb;	 
@@ -360,6 +362,7 @@ $limit $offset";
 		$args['page'] = (!empty($args['pagination']) && !empty($_REQUEST['pno']) && is_numeric($_REQUEST['pno']) )? $_REQUEST['pno'] : $args['page'];
 		$args['offset'] = ($args['page']-1) * $args['limit'];
 		$args['orderby'] = 'event_start_date,event_start_time,event_name'; // must override this to display events in right cronology.
+		$long_events = !empty($args['long_events']);
 
 		$args['mode'] = !empty($args['mode']) ? $args['mode'] : get_option('dbem_event_list_groupby');
 		$args['header_format'] = !empty($args['header_format']) ? $args['header_format'] :  get_option('dbem_event_list_groupby_header_format', '<h2>#s</h2>');
@@ -379,12 +382,12 @@ $limit $offset";
 					$format = (!empty($args['date_format'])) ? $args['date_format']:'Y';
 					$events_dates = array();
 					foreach($EM_Events as $EM_Event){ /* @var $EM_Event EM_Event */
-						$year = date('Y',$EM_Event->start);
+						$year = $EM_Event->start()->format('Y');
 						$events_dates[$year][] = $EM_Event;
 						//if long events requested, add event to other dates too
-						if( empty($args['limit']) && !empty($args['long_events']) && $EM_Event->event_end_date != $EM_Event->event_start_date ) {
+						if( empty($args['limit']) && $long_events && $EM_Event->end()->getDate() != $EM_Event->start()->getDate() ) {
 							$next_year = $year + 1;
-							$year_end = date('Y', $EM_Event->end);
+							$year_end = $EM_Event->end()->format('Y');
 							while( $next_year <= $year_end ){
 								$events_dates[$next_year][] = $EM_Event;
 								$next_year = $next_year + 1;
@@ -392,7 +395,8 @@ $limit $offset";
 						}
 					}
 					foreach ($events_dates as $year => $events){
-						echo str_replace('#s', date_i18n($format,strtotime($year.'-01-01', current_time('timestamp'))), $args['header_format']);
+						$EM_DateTime = new EM_DateTime($year.'-01-01');
+						echo str_replace('#s', $EM_DateTime->i18n($format), $args['header_format']);
 						echo self::output($events, $atts);
 					}
 					break;
@@ -401,18 +405,20 @@ $limit $offset";
 					$format = (!empty($args['date_format'])) ? $args['date_format']:'M Y';
 					$events_dates = array();
 					foreach($EM_Events as $EM_Event){
-						$events_dates[date('Y-m-'.'01', $EM_Event->start)][] = $EM_Event;
+						$events_dates[$EM_Event->start()->format('Y-m-01')][] = $EM_Event;
 						//if long events requested, add event to other dates too
-						if( empty($args['limit']) && !empty($args['long_events']) && $EM_Event->event_end_date != $EM_Event->event_start_date ) {
-							$next_month = strtotime("+1 Month", $EM_Event->start);
-							while( $next_month <= $EM_Event->end ){
-								$events_dates[date('Y-m-'.'01',$next_month)][] = $EM_Event;
-								$next_month = strtotime("+1 Month", $next_month);
+						if( empty($args['limit']) && $long_events && $EM_Event->end()->getDate() != $EM_Event->start()->getDate() ) {
+							///$EM_DateTime is synoymous with the next month here
+							$EM_DateTime = $EM_Event->start()->copy()->add('P1M');
+							while( $EM_DateTime <= $EM_Event->end() ){
+								$events_dates[$EM_DateTime->format('Y-m-01')][] = $EM_Event;
+								$EM_DateTime = $EM_DateTime->add('P1M');
 							}
 						}
 					}
 					foreach ($events_dates as $month => $events){
-						echo str_replace('#s', date_i18n($format, strtotime($month, current_time('timestamp'))), $args['header_format']);
+						$EM_DateTime = new EM_DateTime($month);
+						echo str_replace('#s', $EM_DateTime->i18n($format), $args['header_format']);
 						echo self::output($events, $atts);
 					}
 					break;
@@ -420,25 +426,25 @@ $limit $offset";
 					$format = (!empty($args['date_format'])) ? $args['date_format']:get_option('date_format');
 					$events_dates = array();
 					foreach($EM_Events as $EM_Event){
+						//obtain start of the week as per WordPress general settings
 			   			$start_of_week = get_option('start_of_week');
-						$day_of_week = date('w',$EM_Event->start);
-						$day_of_week = date('w',$EM_Event->start);
+						$day_of_week = $EM_Event->start()->format('w');
 						$offset = $day_of_week - $start_of_week;
 						if($offset<0){ $offset += 7; }
-						$offset = $offset * 60*60*24; //days in seconds
-						$start_day = strtotime($EM_Event->start_date);
-						$events_dates[$start_day - $offset][] = $EM_Event;
+						$EM_DateTime = $EM_Event->start()->copy()->sub('P'.$offset.'D');
+						//save event to date representing start of week for this WP install based on general settings
+						$events_dates[$EM_DateTime->getDate()][] = $EM_Event;
 						//if long events requested, add event to other dates too
-						if( empty($args['limit']) && !empty($args['long_events']) && $EM_Event->event_end_date != $EM_Event->event_start_date ) {
-							$next_week = $start_day - $offset + (86400 * 7);
-							while( $next_week <= $EM_Event->end ){
-								$events_dates[$next_week][] = $EM_Event;
-								$next_week = $next_week + (86400 * 7);
-							}
+						if( empty($args['limit']) && $long_events && $EM_Event->end()->getDate() != $EM_Event->start()->getDate() ) {
+							do{
+								$EM_DateTime->add('P1W');
+								$events_dates[$EM_DateTime->getDate()][] = $EM_Event;
+							}while( $EM_DateTime <= $EM_Event->end() );
 						}
 					}
-					foreach ($events_dates as $event_day_ts => $events){
-						echo str_replace('#s', date_i18n($format,$event_day_ts). get_option('dbem_dates_separator') .date_i18n($format,$event_day_ts+(60*60*24*6)), $args['header_format']);
+					foreach ($events_dates as $date => $events){
+						$dates_formatted = $EM_DateTime->modify($date)->i18n($format). get_option('dbem_dates_separator') . $EM_DateTime->add('P6D')->i18n($format);
+						echo str_replace('#s', $dates_formatted, $args['header_format']);
 						echo self::output($events, $atts);
 					}
 					break;
@@ -447,19 +453,19 @@ $limit $offset";
 					$format = (!empty($args['date_format'])) ? $args['date_format']:get_option('date_format');
 					$events_dates = array();
 					foreach($EM_Events as $EM_Event){
-						$event_start_date = strtotime($EM_Event->start_date);
-						$events_dates[$event_start_date][] = $EM_Event;
+						$EM_DateTime = $EM_Event->start()->copy()->setTime(0,0,0); /* @var EM_DateTime $EM_DateTime */
+						$events_dates[$EM_DateTime->getDate()][] = $EM_Event;
 						//if long events requested, add event to other dates too
-						if( empty($args['limit']) && !empty($args['long_events']) && $EM_Event->event_end_date != $EM_Event->event_start_date ) {
-							$tomorrow = $event_start_date + 86400;
-							while( $tomorrow <= $EM_Event->end ){
-								$events_dates[$tomorrow][] = $EM_Event;
-								$tomorrow = $tomorrow + 86400;
-							}
+						if( empty($args['limit']) && $long_events && $EM_Event->end()->getDate() != $EM_Event->start()->getDate() ) {
+							do{
+								$EM_DateTime->add('P1D');
+								//store indexes as Y-m-d format so we become timezone independent
+								$events_dates[$EM_DateTime->getDate()][] = $EM_Event;
+							}while( $EM_DateTime <= $EM_Event->end() );
 						}
 					}
-					foreach ($events_dates as $event_day_ts => $events){
-						echo str_replace('#s', date_i18n($format,$event_day_ts), $args['header_format']);
+					foreach ($events_dates as $date => $events){
+						echo str_replace('#s', $EM_DateTime->modify($date)->i18n($format), $args['header_format']);
 						echo self::output($events, $atts);
 					}
 					break;
@@ -511,7 +517,6 @@ $limit $offset";
 	 * @see wp-content/plugins/events-manager/classes/EM_Object#build_sql_conditions()
 	 */
 	public static function build_sql_conditions( $args = array() ){
-	    self::$context = EM_POST_TYPE_EVENT;
 		global $wpdb;
 		//continue with conditions
 		$conditions = parent::build_sql_conditions($args);
@@ -632,7 +637,6 @@ $limit $offset";
 	 * @uses EM_Object#get_default_search()
 	 */
 	public static function get_default_search( $array_or_defaults = array(), $array = array() ){
-	    self::$context = EM_POST_TYPE_EVENT;
 		$defaults = array(
 			'recurring' => false, //we don't initially look for recurring events only events and recurrences of recurring events
 			'orderby' => get_option('dbem_events_default_orderby'),
@@ -645,6 +649,7 @@ $limit $offset";
 			'state' => false,
 			'country' => false,
 			'region' => false,
+			'postcode' => false,
 			'blog' => get_current_blog_id(),
 			'private' => current_user_can('read_private_events'),
 			'private_only' => false,

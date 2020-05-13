@@ -4,7 +4,7 @@
      * @author marcus
      *
      */
-    class EM_Notices implements Iterator {
+    class EM_Notices implements Iterator, JsonSerializable {
     	/**
     	 * If object has been displayed, this gets set to true, can be checked to avoid duplicates.
     	 * @var boolean
@@ -52,16 +52,16 @@
         function __toString(){
             $string = false;
             if(count($this->notices['errors']) > 0){
-                $string .= "<div class='em-warning em-warning-errors error'>{$this->get_errors()}</div>";
+                $string .= "<div class='em-warning em-warning-errors notice notice-error'>{$this->get_errors()}</div>";
             }
             if(count($this->notices['alerts']) > 0){
-                $string .= "<div class='em-warning em-warning-alerts updated'>{$this->get_alerts()}</div>";
+                $string .= "<div class='em-warning em-warning-alerts notice notice-warning'>{$this->get_alerts()}</div>";
             }
             if(count($this->notices['infos']) > 0){
-                $string .= "<div class='em-warning em-warning-infos updated'>{$this->get_infos()}</div>";
+                $string .= "<div class='em-warning em-warning-infos notice notice-info'>{$this->get_infos()}</div>";
             }
             if(count($this->notices['confirms']) > 0){
-                $string .= "<div class='em-warning em-warning-confirms updated'>{$this->get_confirms()}</div>";
+                $string .= "<div class='em-warning em-warning-confirms notice notice-success'>{$this->get_confirms()}</div>";
             }
             $this->displayed = true;
             return ($string !== false) ? "<div class='statusnotice'>".$string."</div>" : '';
@@ -141,7 +141,11 @@
         		$string = '';
                 foreach ($this->notices[$type] as $message){
                     if( !is_array($message['string']) ){
-	                    $string .= "<p>{$message['string']}</p>";
+                        if( preg_match('/<p>/', $message['string']) ){
+                            $string .= $message['string'];
+                        }else{
+                            $string .= "<p>{$message['string']}</p>";
+                        }
                     }else{
                         $string .= "<p><strong>".$message['title']."</strong><ul>";
                         foreach($message['string'] as $msg){
@@ -218,7 +222,18 @@
         }  
         function count_confirms(){
             return $this->count('confirms');
-        }  
+        }
+        
+        // Encoiding in JsonSerializable
+	    function jsonSerialize(){
+        	$notices = array();
+	        foreach( $notices as $k => $v ){
+	        	if( !empty($v) ){
+	        		$notices[$k] = $v;
+		        }
+	        }
+        	return $notices;
+	    }
 
 		//Iterator Implementation
 	    function rewind(){
@@ -240,8 +255,8 @@
 	        $key = key($this->bookings);
 	        $var = ($key !== NULL && $key !== FALSE);
 	        return $var;
-	    }        
-        
+	    }
+     
     }
     function em_notices_init(){
 	    global $EM_Notices;

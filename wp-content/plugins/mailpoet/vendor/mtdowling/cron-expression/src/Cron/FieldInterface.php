@@ -1,6 +1,9 @@
 <?php
 
 namespace Cron;
+
+if (!defined('ABSPATH')) exit;
+
 use DateTime;
 
 /**

@@ -1,285 +1,506 @@
 <?php
+
 namespace MailPoet\Config;
 
+if (!defined('ABSPATH')) exit;
+
+
+use MailPoet\Config\PopulatorData\DefaultForm;
 use MailPoet\Cron\CronTrigger;
+use MailPoet\Cron\Workers\AuthorizedSendingEmailsCheck;
+use MailPoet\Cron\Workers\Beamer;
+use MailPoet\Cron\Workers\InactiveSubscribers;
+use MailPoet\Cron\Workers\StatsNotifications\Worker;
+use MailPoet\Cron\Workers\SubscriberLinkTokens;
+use MailPoet\Cron\Workers\UnsubscribeTokens;
+use MailPoet\Entities\UserFlagEntity;
+use MailPoet\Features\FeaturesController;
+use MailPoet\Form\Util\Styles;
 use MailPoet\Mailer\MailerLog;
+use MailPoet\Models\Form;
 use MailPoet\Models\Newsletter;
+use MailPoet\Models\NewsletterLink;
+use MailPoet\Models\ScheduledTask;
 use MailPoet\Models\Segment;
 use MailPoet\Models\SendingQueue;
+use MailPoet\Models\StatisticsForms;
+use MailPoet\Models\Subscriber;
+use MailPoet\Referrals\ReferralDetector;
 use MailPoet\Segments\WP;
-use MailPoet\Models\Setting;
+use MailPoet\Services\Bridge;
 use MailPoet\Settings\Pages;
+use MailPoet\Settings\SettingsController;
+use MailPoet\Settings\UserFlagsRepository;
+use MailPoet\Subscribers\NewSubscriberNotificationMailer;
+use MailPoet\Subscribers\Source;
+use MailPoet\Subscription\Captcha;
 use MailPoet\Util\Helpers;
-
-if(!defined('ABSPATH')) exit;
-
-require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+use MailPoet\WP\Functions as WPFunctions;
+use MailPoetVendor\Carbon\Carbon;
 
 class Populator {
   public $prefix;
   public $models;
   public $templates;
+  /** @var SettingsController */
+  private $settings;
+  /** @var WPFunctions */
+  private $wp;
+  /** @var Captcha */
+  private $captcha;
+  /** @var ReferralDetector  */
+  private $referralDetector;
   const TEMPLATES_NAMESPACE = '\MailPoet\Config\PopulatorData\Templates\\';
+  /** @var FeaturesController */
+  private $flagsController;
 
-  function __construct() {
-    $this->prefix = Env::$db_prefix;
-    $this->models = array(
+  public function __construct(
+    SettingsController $settings,
+    WPFunctions $wp,
+    Captcha $captcha,
+    ReferralDetector $referralDetector,
+    FeaturesController $flagsController
+  ) {
+    $this->settings = $settings;
+    $this->wp = $wp;
+    $this->captcha = $captcha;
+    $this->referralDetector = $referralDetector;
+    $this->prefix = Env::$dbPrefix;
+    $this->models = [
       'newsletter_option_fields',
       'newsletter_templates',
-    );
-    $this->templates = array(
+    ];
+    $this->templates = [
+      'WelcomeBlank1Column',
+      'WelcomeBlank12Column',
+      'GiftWelcome',
+      'Minimal',
+      'Phone',
+      'Sunglasses',
+      'RealEstate',
+      'AppWelcome',
+      'FoodBox',
+      'Poet',
+      'PostNotificationsBlank1Column',
+      'ModularStyleStories',
+      'RssSimpleNews',
+      'NotSoMedium',
+      'WideStoryLayout',
+      'IndustryConference',
+      'ScienceWeekly',
+      'NewspaperTraditional',
+      'ClearNews',
+      'DogFood',
+      'KidsClothing',
+      'RockBand',
+      'WineCity',
+      'Fitness',
+      'Motor',
+      'Avocado',
+      'BookStoreWithCoupon',
+      'FlowersWithCoupon',
       'NewsletterBlank1Column',
       'NewsletterBlank12Column',
       'NewsletterBlank121Column',
       'NewsletterBlank13Column',
-      'PostNotificationsBlank1Column',
-      'WelcomeBlank1Column',
-      'WelcomeBlank12Column',
       'SimpleText',
-      'BurgerJoint',
-      'AppWelcome',
-      'WorldCup',
-      'FoodBox',
-      'Discount',
-      'KickOff',
       'TakeAHike',
-      'FestivalEvent',
-      'PieceOfCake',
-      'Shoes',
-      'ScienceWeekly',
-      'ChocolateStore',
-      'Faith',
-      'TravelNomads',
-      'CoffeeShop',
       'NewsDay',
+      'WorldCup',
+      'FestivalEvent',
+      'RetroComputingMagazine',
+      'Shoes',
+      'Music',
+      'Hotels',
+      'PieceOfCake',
+      'BuddhistTemple',
+      'Mosque',
+      'Synagogue',
+      'Faith',
+      'College',
+      'RenewableEnergy',
+      'PrimarySchool',
+      'ComputerRepair',
       'YogaStudio',
-    );
+      'Retro',
+      'Charity',
+      'CityLocalNews',
+      'Coffee',
+      'Vlogger',
+      'Birds',
+      'Engineering',
+      'BrandingAgencyNews',
+      'WordPressTheme',
+      'Drone',
+      'FashionBlog',
+      'FashionStore',
+      'FashionBlogA',
+      'Photography',
+      'JazzClub',
+      'Guitarist',
+      'HealthyFoodBlog',
+      'Software',
+      'LifestyleBlogA',
+      'FashionShop',
+      'LifestyleBlogB',
+      'Painter',
+      'FarmersMarket',
+    ];
+    $this->flagsController = $flagsController;
   }
 
-  function up() {
+  public function up() {
     $localizer = new Localizer();
     $localizer->forceLoadWebsiteLocaleText();
-    $this->convertExistingDataToUTF8();
-    $this->migrateSimpleScheduledTasks();
-    $this->populateNewsletterSentAtField();
 
-    array_map(array($this, 'populate'), $this->models);
+    array_map([$this, 'populate'], $this->models);
 
-    $this->createDefaultSegments();
+    $defaultSegment = $this->createDefaultSegment();
+    $this->createDefaultForm($defaultSegment);
     $this->createDefaultSettings();
+    $this->createDefaultUsersFlags();
     $this->createMailPoetPage();
+    $this->createSourceForSubscribers();
+    $this->updateMetaFields();
+    $this->scheduleInitialInactiveSubscribersCheck();
+    $this->scheduleAuthorizedSendingEmailsCheck();
+    $this->scheduleBeamer();
+    $this->updateLastSubscribedAt();
+    $this->enableStatsNotificationsForAutomatedEmails();
+    $this->updateSentUnsubscribeLinksToInstantUnsubscribeLinks();
+
+    $this->scheduleUnsubscribeTokens();
+    $this->scheduleSubscriberLinkTokens();
+    $this->detectReferral();
+    $this->updateFormsSuccessMessages();
+    $this->moveGoogleAnalyticsFromPremium();
   }
 
   private function createMailPoetPage() {
-    $pages = get_posts(array(
-      'posts_per_page' => 1,
-      'orderby' => 'date',
-      'order' => 'DESC',
-      'post_type' => 'mailpoet_page'
-    ));
-
-    $page = null;
-    if(!empty($pages)) {
-      $page = array_shift($pages);
-      if(strpos($page->post_content, '[mailpoet_page]') === false) {
-        $page = null;
-      }
-    }
-
-    if($page === null) {
-      $mailpoet_page_id = Pages::createMailPoetPage();
+    $page = Pages::getDefaultMailPoetPage();
+    if ($page === null) {
+      $mailpoetPageId = Pages::createMailPoetPage();
     } else {
-      $mailpoet_page_id = (int)$page->ID;
+      $mailpoetPageId = (int)$page->ID;
     }
 
-    $subscription = Setting::getValue('subscription.pages', array());
-    if(empty($subscription)) {
-      Setting::setValue('subscription.pages', array(
-        'unsubscribe' => $mailpoet_page_id,
-        'manage' => $mailpoet_page_id,
-        'confirmation' => $mailpoet_page_id
-      ));
+    $subscription = $this->settings->get('subscription.pages', []);
+    if (empty($subscription)) {
+      $this->settings->set('subscription.pages', [
+        'unsubscribe' => $mailpoetPageId,
+        'manage' => $mailpoetPageId,
+        'confirmation' => $mailpoetPageId,
+        'captcha' => $mailpoetPageId,
+        'confirm_unsubscribe' => $mailpoetPageId,
+      ]);
+    } elseif (
+      (empty($subscription['captcha']) || $subscription['captcha'] !== $mailpoetPageId)
+      || (empty($subscription['confirm_unsubscribe']) || $subscription['confirm_unsubscribe'] !== $mailpoetPageId)
+    ) {
+      // For existing installations
+      $this->settings->set('subscription.pages', array_merge($subscription, [
+        'captcha' => $mailpoetPageId,
+        'confirm_unsubscribe' => $mailpoetPageId,
+      ]));
     }
   }
 
   private function createDefaultSettings() {
-    $current_user = wp_get_current_user();
+    $currentUser = $this->wp->wpGetCurrentUser();
+    $settingsDbVersion = $this->settings->fetch('db_version');
 
     // set cron trigger option to default method
-    if(!Setting::getValue(CronTrigger::SETTING_NAME)) {
-      Setting::setValue(CronTrigger::SETTING_NAME, array(
-        'method' => CronTrigger::DEFAULT_METHOD
-      ));
+    if (!$this->settings->fetch(CronTrigger::SETTING_NAME)) {
+      $this->settings->set(CronTrigger::SETTING_NAME, [
+        'method' => CronTrigger::DEFAULT_METHOD,
+      ]);
     }
 
     // set default sender info based on current user
-    $sender = array(
-      'name' => $current_user->display_name,
-      'address' => $current_user->user_email
-    );
+    $sender = [
+      'name' => $currentUser->display_name, // phpcs:ignore Squiz.NamingConventions.ValidVariableName.NotCamelCaps
+      'address' => $currentUser->user_email, // phpcs:ignore Squiz.NamingConventions.ValidVariableName.NotCamelCaps
+    ];
 
     // set default from name & address
-    if(!Setting::getValue('sender')) {
-      Setting::setValue('sender', $sender);
+    if (!$this->settings->fetch('sender')) {
+      $this->settings->set('sender', $sender);
     }
 
     // enable signup confirmation by default
-    if(!Setting::getValue('signup_confirmation')) {
-      Setting::setValue('signup_confirmation', array(
+    if (!$this->settings->fetch('signup_confirmation')) {
+      $this->settings->set('signup_confirmation', [
         'enabled' => true,
-        'from' => array(
-          'name' => get_option('blogname'),
-          'address' => get_option('admin_email')
-        ),
-        'reply_to' => $sender
-      ));
+      ]);
     }
 
     // set installation date
-    if(!Setting::getValue('installed_at')) {
-      Setting::setValue('installed_at', date("Y-m-d H:i:s"));
+    if (!$this->settings->fetch('installed_at')) {
+      $this->settings->set('installed_at', date("Y-m-d H:i:s"));
     }
 
-    // set reCaptcha settings
-    $re_captcha = Setting::getValue('re_captcha');
-    if(empty($re_captcha)) {
-      Setting::setValue('re_captcha', array(
-        'enabled' => false,
-        'site_token' => '',
-        'secret_token' => ''
-      ));
+    // set captcha settings
+    $captcha = $this->settings->fetch('captcha');
+    $reCaptcha = $this->settings->fetch('re_captcha');
+    if (empty($captcha)) {
+      $captchaType = Captcha::TYPE_DISABLED;
+      if (!empty($reCaptcha['enabled'])) {
+        $captchaType = Captcha::TYPE_RECAPTCHA;
+      } elseif ($this->captcha->isSupported()) {
+        $captchaType = Captcha::TYPE_BUILTIN;
+      }
+      $this->settings->set('captcha', [
+        'type' => $captchaType,
+        'recaptcha_site_token' => !empty($reCaptcha['site_token']) ? $reCaptcha['site_token'] : '',
+        'recaptcha_secret_token' => !empty($reCaptcha['secret_token']) ? $reCaptcha['secret_token'] : '',
+      ]);
     }
 
+    $subscriberEmailNotification = $this->settings->fetch(NewSubscriberNotificationMailer::SETTINGS_KEY);
+    if (empty($subscriberEmailNotification)) {
+      $sender = $this->settings->fetch('sender', []);
+      $this->settings->set('subscriber_email_notification', [
+        'enabled' => true,
+        'automated' => true,
+        'address' => isset($sender['address']) ? $sender['address'] : null,
+      ]);
+    }
+
+    $statsNotifications = $this->settings->fetch(Worker::SETTINGS_KEY);
+    if (empty($statsNotifications)) {
+      $sender = $this->settings->fetch('sender', []);
+      $this->settings->set(Worker::SETTINGS_KEY, [
+        'enabled' => true,
+        'address' => isset($sender['address']) ? $sender['address'] : null,
+      ]);
+    }
+
+    $woocommerceOptinOnCheckout = $this->settings->fetch('woocommerce.optin_on_checkout');
+    $legacyLabelText = $this->wp->_x('Yes, I would like to be added to your mailing list', "default email opt-in message displayed on checkout page for ecommerce websites");
+    $currentLabelText = $this->wp->_x('I would like to receive exclusive emails with discounts and product information', "default email opt-in message displayed on checkout page for ecommerce websites");
+    if (empty($woocommerceOptinOnCheckout)) {
+      $this->settings->set('woocommerce.optin_on_checkout', [
+        'enabled' => empty($settingsDbVersion), // enable on new installs only
+        'message' => $currentLabelText,
+      ]);
+    } elseif (isset($woocommerceOptinOnCheckout['message']) && $woocommerceOptinOnCheckout['message'] === $legacyLabelText ) {
+      $this->settings->set('woocommerce.optin_on_checkout.message', $currentLabelText);
+    }
     // reset mailer log
     MailerLog::resetMailerLog();
   }
 
-  private function createDefaultSegments() {
+  private function createDefaultUsersFlags() {
+    $lastAnnouncementSeen = $this->settings->fetch('last_announcement_seen');
+    if (!empty($lastAnnouncementSeen)) {
+      foreach ($lastAnnouncementSeen as $userId => $value) {
+        $this->createOrUpdateUserFlag($userId, 'last_announcement_seen', $value);
+      }
+      $this->settings->delete('last_announcement_seen');
+    }
+
+    $prefix = 'user_seen_editor_tutorial';
+    $prefixLength = strlen($prefix);
+    foreach ($this->settings->getAll() as $name => $value) {
+      if (substr($name, 0, $prefixLength) === $prefix) {
+        $userId = substr($name, $prefixLength);
+        $this->createOrUpdateUserFlag($userId, 'editor_tutorial_seen', $value);
+        $this->settings->delete($name);
+      }
+    }
+  }
+
+  private function createOrUpdateUserFlag($userId, $name, $value) {
+    $userFlagsRepository = \MailPoet\DI\ContainerWrapper::getInstance(WP_DEBUG)->get(UserFlagsRepository::class);
+    $flag = $userFlagsRepository->findOneBy([
+      'userId' => $userId,
+      'name' => $name,
+    ]);
+
+    if (!$flag) {
+      $flag = new UserFlagEntity();
+      $flag->setUserId($userId);
+      $flag->setName($name);
+      $userFlagsRepository->persist($flag);
+    }
+    $flag->setValue($value);
+    $userFlagsRepository->flush();
+  }
+
+  private function createDefaultSegment() {
     // WP Users segment
-    $wp_segment = Segment::getWPSegment();
+    Segment::getWPSegment();
+    // WooCommerce customers segment
+    Segment::getWooCommerceSegment();
 
     // Synchronize WP Users
     WP::synchronizeUsers();
 
     // Default segment
-    if(Segment::where('type', 'default')->count() === 0) {
-      $default_segment = Segment::create();
-      $default_segment->hydrate(array(
-        'name' => __('My First List', 'mailpoet'),
+    if (Segment::where('type', 'default')->count() === 0) {
+      $defaultSegment = Segment::create();
+      $newList = [
+        'name' => $this->wp->__('My First List', 'mailpoet'),
         'description' =>
-          __('This list is automatically created when you install MailPoet.', 'mailpoet')
-      ));
-      $default_segment->save();
+          $this->wp->__('This list is automatically created when you install MailPoet.', 'mailpoet'),
+      ];
+      if ($this->flagsController->isSupported(FeaturesController::NEW_DEFAULT_LIST_NAME)) {
+        $newList['name'] = $this->wp->__('Newsletter mailing list', 'mailpoet');
+      }
+      $defaultSegment->hydrate($newList);
+      $defaultSegment->save();
     }
   }
 
-  private function newsletterOptionFields() {
-    $option_fields = array(
-      array(
+  private function createDefaultForm($defaultSegment) {
+    if (Form::count() === 0) {
+      $factory = new DefaultForm(new Styles());
+      if (!$defaultSegment) {
+        $defaultSegment = Segment::where('type', 'default')->orderByAsc('id')->limit(1)->findOne();
+      }
+      Form::createOrUpdate([
+        'name' => $factory->getName(),
+        'body' => serialize($factory->getBody()),
+        'settings' => serialize($factory->getSettings($defaultSegment)),
+        'styles' => $factory->getStyles(),
+      ]);
+    }
+  }
+
+  protected function newsletterOptionFields() {
+    $optionFields = [
+      [
         'name' => 'isScheduled',
         'newsletter_type' => 'standard',
-      ),
-      array(
+      ],
+      [
         'name' => 'scheduledAt',
         'newsletter_type' => 'standard',
-      ),
-      array(
+      ],
+      [
         'name' => 'event',
         'newsletter_type' => 'welcome',
-      ),
-      array(
+      ],
+      [
         'name' => 'segment',
         'newsletter_type' => 'welcome',
-      ),
-      array(
+      ],
+      [
         'name' => 'role',
         'newsletter_type' => 'welcome',
-      ),
-      array(
+      ],
+      [
         'name' => 'afterTimeNumber',
         'newsletter_type' => 'welcome',
-      ),
-      array(
+      ],
+      [
         'name' => 'afterTimeType',
         'newsletter_type' => 'welcome',
-      ),
-
-      array(
+      ],
+      [
         'name' => 'intervalType',
         'newsletter_type' => 'notification',
-      ),
-      array(
+      ],
+      [
         'name' => 'timeOfDay',
         'newsletter_type' => 'notification',
-      ),
-      array(
+      ],
+      [
         'name' => 'weekDay',
         'newsletter_type' => 'notification',
-      ),
-      array(
+      ],
+      [
         'name' => 'monthDay',
         'newsletter_type' => 'notification',
-      ),
-      array(
+      ],
+      [
         'name' => 'nthWeekDay',
         'newsletter_type' => 'notification',
-      ),
-      array(
+      ],
+      [
         'name' => 'schedule',
         'newsletter_type' => 'notification',
-      )
-    );
+      ],
+      [
+        'name' => 'group',
+        'newsletter_type' => Newsletter::TYPE_AUTOMATIC,
+      ],
+      [
+        'name' => 'event',
+        'newsletter_type' => Newsletter::TYPE_AUTOMATIC,
+      ],
+      [
+        'name' => 'sendTo',
+        'newsletter_type' => Newsletter::TYPE_AUTOMATIC,
+      ],
+      [
+        'name' => 'segment',
+        'newsletter_type' => Newsletter::TYPE_AUTOMATIC,
+      ],
+      [
+        'name' => 'afterTimeNumber',
+        'newsletter_type' => Newsletter::TYPE_AUTOMATIC,
+      ],
+      [
+        'name' => 'afterTimeType',
+        'newsletter_type' => Newsletter::TYPE_AUTOMATIC,
+      ],
+      [
+        'name' => 'meta',
+        'newsletter_type' => Newsletter::TYPE_AUTOMATIC,
+      ],
+    ];
 
-    return array(
-      'rows' => $option_fields,
-      'identification_columns' => array(
+    return [
+      'rows' => $optionFields,
+      'identification_columns' => [
         'name',
-        'newsletter_type'
-      )
-    );
+        'newsletter_type',
+      ],
+    ];
   }
 
-  private function newsletterTemplates() {
-    $templates = array();
-    foreach($this->templates as $template) {
+  protected function newsletterTemplates() {
+    $templates = [];
+    foreach ($this->templates as $template) {
       $template = self::TEMPLATES_NAMESPACE . $template;
-      $template = new $template(Env::$assets_url);
+      $template = new $template(Env::$assetsUrl);
       $templates[] = $template->get();
     }
-    return array(
+    return [
       'rows' => $templates,
-      'identification_columns' => array(
-        'name'
-      ),
-      'remove_duplicates' => true
-    );
+      'identification_columns' => [
+        'name',
+      ],
+      'remove_duplicates' => true,
+    ];
   }
 
-  private function populate($model) {
+  protected function populate($model) {
     $modelMethod = Helpers::underscoreToCamelCase($model);
     $table = $this->prefix . $model;
-    $data_descriptor = $this->$modelMethod();
-    $rows = $data_descriptor['rows'];
-    $identification_columns = array_fill_keys(
-      $data_descriptor['identification_columns'],
+    $dataDescriptor = $this->$modelMethod();
+    $rows = $dataDescriptor['rows'];
+    $identificationColumns = array_fill_keys(
+      $dataDescriptor['identification_columns'],
       ''
     );
-    $remove_duplicates =
-      isset($data_descriptor['remove_duplicates']) && $data_descriptor['remove_duplicates'];
+    $removeDuplicates =
+      isset($dataDescriptor['remove_duplicates']) && $dataDescriptor['remove_duplicates'];
 
-    foreach($rows as $row) {
-      $existence_comparison_fields = array_intersect_key(
+    foreach ($rows as $row) {
+      $existenceComparisonFields = array_intersect_key(
         $row,
-        $identification_columns
+        $identificationColumns
       );
 
-      if(!$this->rowExists($table, $existence_comparison_fields)) {
+      if (!$this->rowExists($table, $existenceComparisonFields)) {
         $this->insertRow($table, $row);
       } else {
-        if($remove_duplicates) {
-          $this->removeDuplicates($table, $row, $existence_comparison_fields);
+        if ($removeDuplicates) {
+          $this->removeDuplicates($table, $row, $existenceComparisonFields);
         }
-        $this->updateRow($table, $row, $existence_comparison_fields);
+        $this->updateRow($table, $row, $existenceComparisonFields);
       }
     }
   }
@@ -287,7 +508,7 @@ class Populator {
   private function rowExists($table, $columns) {
     global $wpdb;
 
-    $conditions = array_map(function($key) use ($columns) {
+    $conditions = array_map(function($key) {
       return $key . '=%s';
     }, array_keys($columns));
 
@@ -319,9 +540,9 @@ class Populator {
   private function removeDuplicates($table, $row, $where) {
     global $wpdb;
 
-    $conditions = array('1=1');
-    $values = array();
-    foreach($where as $field => $value) {
+    $conditions = ['1=1'];
+    $values = [];
+    foreach ($where as $field => $value) {
       $conditions[] = "`t1`.`$field` = `t2`.`$field`";
       $conditions[] = "`t1`.`$field` = %s";
       $values[] = $value;
@@ -338,146 +559,176 @@ class Populator {
     );
   }
 
-  /*
-   * MailPoet versions 3.0.0-beta.32 and older used the default MySQL connection
-   * character set, which usually defaults to latin1, but stored UTF-8 data.
-   * This method converts existing incorrectly stored data that uses the
-   * default character set, into a new character set that is used by WordPress.
-   *
-   * TODO: remove in final release
-   */
-  function convertExistingDataToUTF8() {
-    global $wpdb;
+  private function createSourceForSubscribers() {
+    Subscriber::rawExecute(
+      ' UPDATE LOW_PRIORITY `' . Subscriber::$_table . '` subscriber ' .
+      ' JOIN `' . StatisticsForms::$_table . '` stats ON stats.subscriber_id=subscriber.id ' .
+      ' SET `source` = "' . Source::FORM . '"' .
+      ' WHERE `source` = "' . Source::UNKNOWN . '"'
+    );
+    Subscriber::rawExecute(
+      'UPDATE LOW_PRIORITY `' . Subscriber::$_table . '`' .
+      ' SET `source` = "' . Source::WORDPRESS_USER . '"' .
+      ' WHERE `source` = "' . Source::UNKNOWN . '"' .
+      ' AND `wp_user_id` IS NOT NULL'
+    );
+    Subscriber::rawExecute(
+      'UPDATE LOW_PRIORITY `' . Subscriber::$_table . '`' .
+      ' SET `source` = "' . Source::WOOCOMMERCE_USER . '"' .
+      ' WHERE `source` = "' . Source::UNKNOWN . '"' .
+      ' AND `is_woocommerce_user` = 1'
+    );
+  }
 
-    if(!version_compare(Setting::getValue('db_version', '3.0.0-beta.33'), '3.0.0-beta.32', '<=')) {
-      // Data conversion should only be performed only once, when migrating from
-      // older version
+  private function updateMetaFields() {
+    global $wpdb;
+    // perform once for versions below or equal to 3.26.0
+    if (version_compare($this->settings->get('db_version', '3.26.1'), '3.26.0', '>')) {
       return false;
     }
-
-    $source_charset = $wpdb->get_var('SELECT @@GLOBAL.character_set_connection');
-    $destination_charset = $wpdb->get_var('SELECT @@SESSION.character_set_connection');
-
-    if($source_charset === $destination_charset) return;
-    // UTF8MB4 is a superset of UTF8, thus a conversion is not necessary
-    if(substr($source_charset, 0, 4) === 'utf8' && $destination_charset === 'utf8mb4') return;
-
-    $tables = array(
-      'segments' => array('name', 'type', 'description'),
-      'settings' => array('name', 'value'),
-      'custom_fields' => array('name', 'type', 'params'),
-      'sending_queues' => array('type', 'newsletter_rendered_body', 'newsletter_rendered_subject', 'subscribers', 'status'),
-      'subscribers' => array('first_name', 'last_name', 'email', 'status', 'subscribed_ip', 'confirmed_ip', 'unconfirmed_data'),
-      'subscriber_segment' => array('status'),
-      'subscriber_custom_field' => array('value'),
-      'newsletters' => array('hash', 'subject', 'type', 'sender_address', 'sender_name', 'status', 'reply_to_address', 'reply_to_name', 'preheader', 'body'),
-      'newsletter_templates' => array('name', 'description', 'body', 'thumbnail'),
-      'newsletter_option_fields' => array('name', 'newsletter_type'),
-      'newsletter_option' => array('value'),
-      'newsletter_links' => array('url', 'hash'),
-      'forms' => array('name', 'body', 'settings', 'styles'),
-    );
-
-    foreach($tables as $table => $columns) {
-      $query = "UPDATE `%s` SET %s WHERE %s";
-      $columns_query = array();
-      $where_query = array();
-      foreach($columns as $column) {
-        $columns_query[] = sprintf(
-          '`%1$s` = @%1$s',
-          $column
-        );
-        $where_query[] = sprintf(
-          'char_length(%1$s) = length(@%1$s := convert(binary convert(%1$s using %2$s) using %3$s))',
-          $column,
-          $source_charset,
-          $destination_charset
-        );
-      }
-      $wpdb->query(sprintf(
-        $query,
-        $this->prefix . $table,
-        implode(', ', $columns_query),
-        implode(' AND ', $where_query)
-      ));
+    $tables = [ScheduledTask::$_table, SendingQueue::$_table];
+    foreach ($tables as $table) {
+      $query = "UPDATE `%s` SET meta = NULL WHERE meta = 'null'";
+      $wpdb->query(sprintf($query, $table));
     }
-
     return true;
   }
 
-  /*
-   * This migrates simple scheduled tasks from sending queues table to scheduled tasks table
-   *
-   * TODO: remove in final release
-   */
-  public function migrateSimpleScheduledTasks() {
-    global $wpdb;
-
-    // perform once for versions below 3.0.0-beta.36.2.1
-    if(version_compare(Setting::getValue('db_version', '3.0.0-beta.36.2.3'), '3.0.0-beta.36.2.1', '>=')) {
-      return false;
-    }
-
-    $column_list = array(
-      'id',
-      'type',
-      'subscribers',
-      'status',
-      'priority',
-      'count_total',
-      'count_processed',
-      'count_to_process',
-      'scheduled_at',
-      'processed_at',
-      'created_at',
-      'updated_at',
-      'deleted_at'
+  private function scheduleInitialInactiveSubscribersCheck() {
+    $this->scheduleTask(
+      InactiveSubscribers::TASK_TYPE,
+      Carbon::createFromTimestamp($this->wp->currentTime('timestamp'))->addHour()
     );
-
-    $task_types = array(
-      'bounce',
-      'sending_service_key_check',
-      'premium_key_check'
-    );
-
-    $wpdb->query(sprintf(
-      'INSERT IGNORE INTO %s SELECT %s FROM %s WHERE %s',
-      MP_SCHEDULED_TASKS_TABLE,
-      '`' . join('`, `', $column_list) . '`',
-      MP_SENDING_QUEUES_TABLE,
-      '`type` IN("' . join('" , "', $task_types) . '")'
-    ));
-
-    $wpdb->query(sprintf(
-      'DELETE FROM %s WHERE %s',
-      MP_SENDING_QUEUES_TABLE,
-      '`type` IN("' . join('" , "', $task_types) . '")'
-    ));
-
-    return true;
   }
 
-  /*
-   * This populates existing newsletters' sent_at field with processed_at field data from
-   * corresponding sending queue.
-   *
-   * TODO: remove in final release
-   */
-  function populateNewsletterSentAtField() {
-    global $wpdb;
+  private function scheduleAuthorizedSendingEmailsCheck() {
+    if (!Bridge::isMPSendingServiceEnabled()) {
+      return;
+    }
+    $this->scheduleTask(
+      AuthorizedSendingEmailsCheck::TASK_TYPE,
+      Carbon::createFromTimestamp($this->wp->currentTime('timestamp'))
+    );
+  }
 
-    // perform once for versions below 3.0.0-beta.36.2.1
-    if(version_compare(Setting::getValue('db_version', '3.0.0-beta.36.2.3'), '3.0.0-beta.36.2.1', '>=')) {
+  private function scheduleBeamer() {
+    if (!$this->settings->get('last_announcement_date')) {
+      $this->scheduleTask(
+        Beamer::TASK_TYPE,
+        Carbon::createFromTimestamp($this->wp->currentTime('timestamp'))
+      );
+    }
+  }
+
+  private function updateLastSubscribedAt() {
+    global $wpdb;
+    // perform once for versions below or equal to 3.42.0
+    if (version_compare($this->settings->get('db_version', '3.42.1'), '3.42.0', '>')) {
       return false;
     }
-
-    $query = "UPDATE `%s` newsletters JOIN `%s` queues ON newsletters.id = queues.newsletter_id SET newsletters.sent_at = queues.processed_at";
+    $query = "UPDATE `%s` SET last_subscribed_at = GREATEST(COALESCE(confirmed_at, 0), COALESCE(created_at, 0)) WHERE status != '%s' AND last_subscribed_at IS NULL;";
     $wpdb->query(sprintf(
       $query,
-      Newsletter::$_table,
-      SendingQueue::$_table
+      Subscriber::$_table,
+      Subscriber::STATUS_UNCONFIRMED
     ));
-
     return true;
+  }
+
+  private function scheduleUnsubscribeTokens() {
+    $this->scheduleTask(
+      UnsubscribeTokens::TASK_TYPE,
+      Carbon::createFromTimestamp($this->wp->currentTime('timestamp'))
+    );
+  }
+
+  private function scheduleSubscriberLinkTokens() {
+    $this->scheduleTask(
+      SubscriberLinkTokens::TASK_TYPE,
+      Carbon::createFromTimestamp($this->wp->currentTime('timestamp'))
+    );
+  }
+
+  private function scheduleTask($type, $datetime) {
+    $task = ScheduledTask::where('type', $type)
+      ->whereRaw('status = ? OR status IS NULL', [ScheduledTask::STATUS_SCHEDULED])
+      ->findOne();
+    if ($task) {
+      return true;
+    }
+    $task = ScheduledTask::create();
+    $task->type = $type;
+    $task->status = ScheduledTask::STATUS_SCHEDULED;
+    $task->scheduledAt = $datetime;
+    $task->save();
+  }
+
+  /**
+   * Remove this comment when this private function is actually used
+   * @phpcsSuppress SlevomatCodingStandard.Classes.UnusedPrivateElements
+   */
+  private function updateFormsSuccessMessages() {
+    if (version_compare($this->settings->get('db_version', '3.23.2'), '3.23.1', '>')) {
+      return;
+    }
+    Form::updateSuccessMessages();
+  }
+
+  private function enableStatsNotificationsForAutomatedEmails() {
+    if (version_compare($this->settings->get('db_version', '3.31.2'), '3.31.1', '>')) {
+      return;
+    }
+    $settings = $this->settings->get(Worker::SETTINGS_KEY);
+    $settings['automated'] = true;
+    $this->settings->set(Worker::SETTINGS_KEY, $settings);
+  }
+
+  private function updateSentUnsubscribeLinksToInstantUnsubscribeLinks() {
+    if (version_compare($this->settings->get('db_version', '3.46.14'), '3.46.13', '>')) {
+      return;
+    }
+    $query = "UPDATE `%s` SET `url` = '%s' WHERE `url` = '%s';";
+    global $wpdb;
+    $wpdb->query(sprintf(
+      $query,
+      NewsletterLink::$_table,
+      NewsletterLink::INSTANT_UNSUBSCRIBE_LINK_SHORT_CODE,
+      NewsletterLink::UNSUBSCRIBE_LINK_SHORT_CODE
+    ));
+  }
+
+  private function moveGoogleAnalyticsFromPremium() {
+    global $wpdb;
+    if (version_compare($this->settings->get('db_version', '3.38.2'), '3.38.1', '>')) {
+      return;
+    }
+    $premiumTableName = $wpdb->prefix . 'mailpoet_premium_newsletter_extra_data';
+    $premiumTableExists = (int)$wpdb->get_var(
+      $wpdb->prepare(
+        "SELECT COUNT(1) FROM information_schema.tables WHERE table_schema=%s AND table_name=%s;",
+        $wpdb->dbname,
+        $premiumTableName
+      )
+    );
+    if ($premiumTableExists) {
+      $query = "
+        UPDATE
+          `%s` as n
+        JOIN %s as ped ON n.id=ped.newsletter_id
+          SET n.ga_campaign = ped.ga_campaign
+      ";
+      $wpdb->query(
+        sprintf(
+          $query,
+          Newsletter::$_table,
+          $premiumTableName
+        )
+      );
+    }
+    return true;
+  }
+
+  private function detectReferral() {
+    $this->referralDetector->detect();
   }
 }

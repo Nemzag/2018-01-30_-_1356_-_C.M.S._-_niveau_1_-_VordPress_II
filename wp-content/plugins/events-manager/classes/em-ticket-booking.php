@@ -13,6 +13,11 @@ class EM_Ticket_Booking extends EM_Object{
 		'ticket_booking_price' => array('name'=>'price','type'=>'%f'),
 		'ticket_booking_spaces' => array('name'=>'spaces','type'=>'%d')
 	);
+	var $shortnames = array(
+		'id' => 'ticket_booking_id',
+		'price' => 'ticket_booking_price',
+		'spaces' => 'ticket_booking_spaces',
+	);
 	//Other Vars
 	/**
 	 * Contains ticket object
@@ -62,6 +67,7 @@ class EM_Ticket_Booking extends EM_Object{
 			//Now we save the ticket
 			$this->booking_id = $this->get_booking()->booking_id; //event wouldn't exist before save, so refresh id
 			$data = $this->to_array(true); //add the true to remove the nulls
+			$result = null;
 			if($this->ticket_booking_id != ''){
 				if($this->get_spaces() > 0){
 					$where = array( 'ticket_booking_id' => $this->ticket_booking_id );  
@@ -200,7 +206,7 @@ class EM_Ticket_Booking extends EM_Object{
 		}else{
 			$this->ticket = new EM_Ticket($this->ticket_id);
 		}
-		return $this->ticket;
+		return apply_filters('em_ticket_booking_get_ticket', $this->ticket, $this);
 	}
 	
 	/**
@@ -209,8 +215,18 @@ class EM_Ticket_Booking extends EM_Object{
 	 */
 	function delete(){
 		global $wpdb;
-		$sql = $wpdb->prepare("DELETE FROM ". EM_TICKETS_BOOKINGS_TABLE . " WHERE ticket_booking_id=%d", $this->ticket_booking_id);
-		$result = $wpdb->query( $sql );
+		if( $this->ticket_booking_id ){
+			$sql = $wpdb->prepare("DELETE FROM ". EM_TICKETS_BOOKINGS_TABLE . " WHERE ticket_booking_id=%d LIMIT 1", $this->ticket_booking_id);
+		}elseif( !empty($this->ticket_id) && !empty($this->booking_id) ){
+			//in the event a ticket_booking_id isn't available we can delete via the booking and ticket id
+			$sql = $wpdb->prepare("DELETE FROM ". EM_TICKETS_BOOKINGS_TABLE . " WHERE ticket_id=%d AND booking_id=%d LIMIT 1", $this->ticket_id, $this->booking_id);
+		}else{
+			//cannot delete ticket
+			$result = false;
+		}
+		if( !empty($sql) ){
+			$result = $wpdb->query( $sql );
+		}
 		return apply_filters('em_ticket_booking_delete', ($result !== false ), $this);
 	}
 	

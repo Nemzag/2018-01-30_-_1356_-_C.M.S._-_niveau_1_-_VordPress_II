@@ -2,13 +2,13 @@
 /**
  * Deals with the booking info for an event
  * @author marcus
- *
+ * @property EM_Booking[] $bookings
  */
 class EM_Bookings extends EM_Object implements Iterator{
 	
 	/**
 	 * Array of EM_Booking objects for a specific event
-	 * @var array
+	 * @var EM_Booking[]
 	 */
 	protected $bookings;
 	/**
@@ -64,6 +64,7 @@ class EM_Bookings extends EM_Object implements Iterator{
 		if( $var == 'bookings' ){
 			return $this->load();
 		}
+		return parent::__get( $var );
 	}
 	
 	public function __set( $var, $val ){
@@ -74,6 +75,7 @@ class EM_Bookings extends EM_Object implements Iterator{
 				$this->bookings = null;
 			}
 		}
+		parent::__set( $var, $val );
 	}
 	
 	/**
@@ -84,13 +86,12 @@ class EM_Bookings extends EM_Object implements Iterator{
 	 * @param string $var
 	 * @return boolean
 	 */
-	public function __isset( $var ){
+	public function __isset( $prop ){
 		//if isset is invoked on $EM_Bookings->bookings then we'll assume it's only set if the bookings property is empty, not if null.
-		$result = false;
-		if( $var == 'bookings' ){
-			$result = !empty($this->bookings);
+		if( $prop == 'bookings' ){
+			return $this->bookings !== null;
 		}
-		return $result;
+		return parent::__isset( $prop );
 	}
 	
 	public function load( $refresh = false ){
@@ -125,7 +126,8 @@ class EM_Bookings extends EM_Object implements Iterator{
 		if($result){
 			//Success
 		    do_action('em_bookings_added', $EM_Booking);
-			if( $this->bookings !== null ) $this->bookings[] = $EM_Booking;
+			if( $this->bookings === null ) $this->bookings = array();
+			$this->bookings[] = $EM_Booking;
 			$email = $EM_Booking->email();
 			if( get_option('dbem_bookings_approval') == 1 && $EM_Booking->booking_status == 0){
 				$this->feedback_message = get_option('dbem_booking_feedback_pending');
@@ -180,7 +182,7 @@ class EM_Bookings extends EM_Object implements Iterator{
 		}else{
 			if( is_numeric($this->event_id) && $this->event_id > 0 ){
 				return em_get_event($this->event_id, 'event_id');
-			}elseif( count($this->bookings) > 0 ){
+			}elseif( is_array($this->bookings) ){
 				foreach($this->bookings as $EM_Booking){
 					/* @var $EM_Booking EM_Booking */
 					return em_get_event($EM_Booking->event_id, 'event_id');
@@ -198,23 +200,39 @@ class EM_Bookings extends EM_Object implements Iterator{
 	function get_tickets( $force_reload = false ){
 		if( !is_object($this->tickets) || $force_reload ){
 			$this->tickets = new EM_Tickets($this->event_id);
-			if( get_option('dbem_bookings_tickets_single') && count($this->tickets->tickets) == 1 && !empty($this->get_event()->rsvp_end) ){
+			if( get_option('dbem_bookings_tickets_single') && count($this->tickets->tickets) == 1 ){
 				//if in single ticket mode, then the event booking cut-off is the ticket end date
 		    	$EM_Ticket = $this->tickets->get_first();
 		    	$EM_Event = $this->get_event();
 		    	//if ticket has cut-off date, that should take precedence as we save the ticket cut-off date/time to the event in single ticket mode
 		    	if( !empty($EM_Ticket->ticket_end) ){
 		    		//if ticket end dates are set, move to event
-		    		$EM_Event->event_rsvp_date = date('Y-m-d', $EM_Ticket->end_timestamp);
-		    		$EM_Event->event_rsvp_time = date('H:i:00', $EM_Ticket->end_timestamp);
-		    		$EM_Event->rsvp_end = $EM_Ticket->end_timestamp;
+		    		$EM_Event->event_rsvp_date = $EM_Ticket->end()->format('Y-m-d');
+		    		$EM_Event->event_rsvp_time = $EM_Ticket->end()->format('H:i:00');
 		    		if( $EM_Event->is_recurring() && !empty($EM_Ticket->ticket_meta['recurrences']) ){
 		    			$EM_Event->recurrence_rsvp_days = $EM_Ticket->ticket_meta['recurrences']['end_days'];		    			
 		    		}
 		    	}else{
-		    		//if no end date is set, use event end date (which will have defaulted to the event start date 
-		    		$EM_Ticket->ticket_end = $EM_Event->event_rsvp_date." ".$EM_Event->event_rsvp_time;
-		    		$EM_Ticket->end_timestamp = $EM_Event->rsvp_end;
+		    		//if no end date is set, use event end date (which will have defaulted to the event start date
+		    		if( !$EM_Event->is_recurring() ){
+		    			//save if we have a valid rsvp end date
+		    			if( $EM_Event->rsvp_end()->valid ){
+						    $EM_Ticket->ticket_end = $EM_Event->rsvp_end()->getDateTime();
+					    }
+		    		}else{
+			    		if( !isset($EM_Ticket->ticket_meta['recurrences']['end_days']) ){
+			    			//for recurrences, we take the recurrence_rsvp_days and feed it into the ticket meta that'll handle recurrences
+			    			$EM_Ticket->ticket_meta['recurrences']['end_days'] = !empty($EM_Event->recurrence_rsvp_days) ? $EM_Event->recurrence_rsvp_days : 0;
+			    			if( !isset($EM_Ticket->ticket_meta['recurrences']['end_time']) ){
+			    				iF( empty($EM_Event->event_rsvp_time) ){
+								    $EM_Ticket->ticket_meta['recurrences']['end_time'] = $EM_Event->start()->getTime();
+							    }else{
+								    $EM_Ticket->ticket_meta['recurrences']['end_time'] = $EM_Event->event_rsvp_time;
+							    }
+			    			}
+						    $EM_Ticket->ticket_end = $EM_Event->start()->format('Y-m-d') . $EM_Ticket->ticket_meta['recurrences']['end_time'];
+			    		}
+		    		}
 		    	}
 			}
 		}else{
@@ -272,9 +290,7 @@ class EM_Bookings extends EM_Object implements Iterator{
 	function has_open_time(){
 	    $return = false;
 	    $EM_Event = $this->get_event();
-	    if(!empty($EM_Event->event_rsvp_date) && $EM_Event->rsvp_end > current_time('timestamp')){
-	    	$return = true;
-	    }elseif( empty($EM_Event->event_rsvp_date) && $EM_Event->start > current_time('timestamp') ){
+	    if( $EM_Event->rsvp_end()->getTimestamp() > time()){
 	    	$return = true;
 	    }
 	    return $return;
@@ -445,7 +461,8 @@ class EM_Bookings extends EM_Object implements Iterator{
 	}
 	
 	/**
-	 * Gets number of bookings (not spaces). If booking approval is enabled, only the number of approved bookings will be shown.
+	 * Gets booking objects (not spaces). If booking approval is enabled, only the number of approved bookings will be shown.
+	 * @param boolean $all_bookings If set to true, then all bookings with any status is returned
 	 * @return EM_Bookings
 	 */
 	function get_bookings( $all_bookings = false ){
@@ -562,7 +579,7 @@ class EM_Bookings extends EM_Object implements Iterator{
 			$sql = "
 				SELECT * FROM $bookings_table b 
 				LEFT JOIN $events_table e ON e.event_id=b.event_id 
-				WHERE booking_id".implode(" OR booking_id=", $args);
+				WHERE booking_id=".implode(" OR booking_id=", $args);
 			$results = $wpdb->get_results(apply_filters('em_bookings_get_sql',$sql),ARRAY_A);
 			$bookings = array();
 			foreach($results as $result){
@@ -582,7 +599,7 @@ class EM_Bookings extends EM_Object implements Iterator{
 		$where = ( count($conditions) > 0 ) ? " WHERE " . implode ( " AND ", $conditions ):'';
 		
 		//Get ordering instructions
-		$EM_Booking = em_get_booking();
+		$EM_Booking = new EM_Booking();
 		$accepted_fields = $EM_Booking->get_fields(true);
 		$accepted_fields['date'] = 'booking_date';
 		$orderby = self::build_sql_orderby($args, $accepted_fields);
@@ -613,7 +630,7 @@ class EM_Bookings extends EM_Object implements Iterator{
 		$results = $wpdb->get_results($sql, ARRAY_A);
 
 		//If we want results directly in an array, why not have a shortcut here?
-		if( $args['array'] == true ){
+		if( !empty($args['array']) ){
 			return $results;
 		}
 		
@@ -741,7 +758,7 @@ class EM_Bookings extends EM_Object implements Iterator{
 			'person' => true, //to add later, search by person's bookings...
 			'blog' => get_current_blog_id(),
 			'ticket_id' => false,
-			'array' => false //returns an array of results if true, if an array or text it's assumed an array or single row requested 
+			'array' => false //returns an array of results if true, if an array or text it's assumed an array of specific table fields or single field name requested 
 		);
 		//sort out whether defaults were supplied or just the array of search values
 		if( empty($array) ){

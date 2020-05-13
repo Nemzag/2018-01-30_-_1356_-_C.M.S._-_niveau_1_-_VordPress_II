@@ -1,4 +1,7 @@
 <?php
+
+if (!defined('ABSPATH')) exit;
+
 /**
  * @author Niels A.D.
  * @author Todd Burry <todd@vanillaforums.com>

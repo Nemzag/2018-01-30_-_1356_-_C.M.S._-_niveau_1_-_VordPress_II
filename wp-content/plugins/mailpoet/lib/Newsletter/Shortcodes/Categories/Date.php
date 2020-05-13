@@ -2,25 +2,29 @@
 
 namespace MailPoet\Newsletter\Shortcodes\Categories;
 
+if (!defined('ABSPATH')) exit;
+
+
+use MailPoet\WP\Functions as WPFunctions;
+
 class Date {
-  static function process(
-    $action,
-    $action_argument = false,
-    $action_argument_value = false
+  public static function process(
+    $shortcodeDetails
   ) {
-    $action_mapping = array(
+    $actionMapping = [
       'd' => 'd',
-      'dordinal' => 'dS',
+      'dordinal' => 'jS',
       'dtext' => 'l',
       'm' => 'm',
       'mtext' => 'F',
-      'y' => 'Y'
-    );
-    if(!empty($action_mapping[$action])) {
-      return date_i18n($action_mapping[$action], current_time('timestamp'));
+      'y' => 'Y',
+    ];
+    $wp = new WPFunctions();
+    if (!empty($actionMapping[$shortcodeDetails['action']])) {
+      return WPFunctions::get()->dateI18n($actionMapping[$shortcodeDetails['action']], $wp->currentTime('timestamp'));
     }
-    return ($action === 'custom' && $action_argument === 'format') ?
-      date_i18n($action_argument_value, current_time('timestamp')) :
+    return ($shortcodeDetails['action'] === 'custom' && $shortcodeDetails['action_argument'] === 'format') ?
+      WPFunctions::get()->dateI18n($shortcodeDetails['action_argument_value'], $wp->currentTime('timestamp')) :
       false;
   }
 }

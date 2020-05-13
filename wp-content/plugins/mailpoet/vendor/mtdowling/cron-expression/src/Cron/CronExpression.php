@@ -2,6 +2,9 @@
 
 namespace Cron;
 
+if (!defined('ABSPATH')) exit;
+
+
 use DateTime;
 use DateTimeImmutable;
 use DateTimeZone;

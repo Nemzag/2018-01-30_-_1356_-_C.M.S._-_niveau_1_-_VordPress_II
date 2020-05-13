@@ -57,7 +57,8 @@ class EM_Location_Post_Admin{
 		$post_type = $data['post_type'];
 		$post_ID = !empty($postarr['ID']) ? $postarr['ID'] : false;
 		$is_post_type = $post_type == EM_POST_TYPE_LOCATION;
-		$saving_status = !in_array($data['post_status'], array('trash','auto-draft')) && !defined('DOING_AUTOSAVE');
+		$doing_add_meta_ajax = defined('DOING_AJAX') && DOING_AJAX && !empty($_REQUEST['action']) && $_REQUEST['action'] == 'add-meta' && check_ajax_referer( 'add-meta', '_ajax_nonce-add-meta', false );  //we don't need to save anything here, we don't use this action
+		$saving_status = !in_array($data['post_status'], array('trash','auto-draft')) && !defined('DOING_AUTOSAVE') && !$doing_add_meta_ajax;
 		$untrashing = $post_ID && defined('UNTRASHING_'.$post_ID);
 		if( !$untrashing && $is_post_type && $saving_status ){
 			if( !empty($_REQUEST['_emnonce']) && wp_verify_nonce($_REQUEST['_emnonce'], 'edit_location') ){ 
@@ -80,7 +81,8 @@ class EM_Location_Post_Admin{
 	public static function save_post($post_id){
 		global $wpdb, $EM_Location, $EM_Notices, $EM_SAVING_LOCATION;
 		if( !empty($EM_SAVING_LOCATION) ) return; //If we're saving a location via EM_Location::save() we should never run the below
-		$saving_status = !in_array(get_post_status($post_id), array('trash','auto-draft')) && !defined('DOING_AUTOSAVE');
+		$doing_add_meta_ajax = defined('DOING_AJAX') && DOING_AJAX && !empty($_REQUEST['action']) && $_REQUEST['action'] == 'add-meta' && check_ajax_referer( 'add-meta', '_ajax_nonce-add-meta', false ); //we don't need to save anything here, we don't use this action
+		$saving_status = !in_array(get_post_status($post_id), array('trash','auto-draft')) && !defined('DOING_AUTOSAVE') && !$doing_add_meta_ajax;
 		$is_post_type = get_post_type($post_id) == EM_POST_TYPE_LOCATION;
 		if(!defined('UNTRASHING_'.$post_id) && $is_post_type && $saving_status){
 			if( !empty($_REQUEST['_emnonce']) && wp_verify_nonce($_REQUEST['_emnonce'], 'edit_location')){
@@ -97,6 +99,9 @@ class EM_Location_Post_Admin{
 					apply_filters('em_location_save', false , $EM_Location);
 				}else{
 					apply_filters('em_location_save', true , $EM_Location);
+					//flag a cache refresh if we get here
+					$EM_Location->refresh_cache = true;
+					add_filter('save_post', 'EM_Location_Post_Admin::refresh_cache', 100000000);
 				}
 			}else{
 				//do a quick and dirty update
@@ -112,7 +117,25 @@ class EM_Location_Post_Admin{
 				$sql = $wpdb->prepare("UPDATE ".EM_LOCATIONS_TABLE." SET location_name=%s, location_owner=%s, location_slug=%s, location_private=%d, location_status={$location_status} WHERE location_id=%d", $where_array);
 				$wpdb->query($sql);
 				apply_filters('em_location_save', true , $EM_Location);
+				//flag a cache refresh if we get here
+				$EM_Location->refresh_cache = true;
+				add_filter('save_post', 'EM_Location_Post_Admin::refresh_cache', 100000000);
 			}
+		}
+	}
+	
+	/**
+	 * Refreshes the cache of the current global $EM_Location, provided the refresh_cache flag is set to true within the object and the object has a published state
+	 */
+	public static function refresh_cache(){
+		global $EM_Location;
+		//if this is a published event, and the refresh_cache flag was added to this event during save_post, refresh the meta and update the cache
+		if( !empty($EM_Location->refresh_cache) && !empty($EM_Location->post_id) && $EM_Location->is_published() ){
+			$post = get_post($EM_Location->post_id);
+			$EM_Location->load_postdata($post);
+			unset($EM_Location->refresh_cache);
+			wp_cache_set($EM_Location->location_id, $EM_Location, 'em_locations');
+			wp_cache_set($EM_Location->post_id, $EM_Location->location_id, 'em_locations_ids');
 		}
 	}
 
@@ -159,6 +182,10 @@ class EM_Location_Post_Admin{
 		if( get_option('dbem_location_attributes_enabled') ){
 			add_meta_box('em-location-attributes', __('Attributes','events-manager'), array('EM_Location_Post_Admin','meta_box_attributes'),EM_POST_TYPE_LOCATION, 'normal','default');
 		}
+		//anonymous submission meta
+		if( !empty($EM_Location->owner_anonymous) ){
+			add_meta_box('em-location-anonymous', __('Anonymous Submitter Info','events-manager'), array('EM_Location_Post_Admin','meta_box_anonymous'),EM_POST_TYPE_LOCATION, 'side','high');
+		}
 	}
 	
 	public static function meta_box_metadump(){
@@ -166,6 +193,7 @@ class EM_Location_Post_Admin{
 		echo "<pre>"; print_r(get_post_custom($post->ID)); echo "</pre>";
 		echo "<pre>"; print_r($EM_Location); echo "</pre>";
 	}
+	
 	public static function meta_box_where(){
 		?><input type="hidden" name="_emnonce" value="<?php echo wp_create_nonce('edit_location'); ?>" /><?php
 		em_locate_template('forms/location/where.php',true);		
@@ -173,6 +201,15 @@ class EM_Location_Post_Admin{
 	
 	public static function meta_box_attributes(){
 		em_locate_template('forms/location/attributes.php',true);
+	}
+	
+	public static function meta_box_anonymous(){
+		global $EM_Location; /* @var EM_Location $EM_Location */
+		?>
+		<div class='updated'><p><?php echo sprintf(__('This %s was submitted by a guest. You will find their details in the <em>Anonymous Submitter Info</em> box','events-manager'), __('location', 'events-manager')); ?></p></div>
+		<p><strong><?php _e('Name','events-manager'); ?> :</strong> <?php echo $EM_Location->owner_name; ?></p>
+		<p><strong><?php _e('Email','events-manager'); ?> :</strong> <?php echo $EM_Location->owner_email; ?></p>
+		<?php
 	}
 }
 add_action('admin_init',array('EM_Location_Post_Admin','init'));

@@ -1,121 +1,131 @@
 <?php
+
 namespace MailPoet\Form;
 
-use MailPoet\Models\Setting;
+if (!defined('ABSPATH')) exit;
 
-if(!defined('ABSPATH')) exit;
+
+use MailPoet\Form\Util\Styles;
+use MailPoet\Settings\SettingsController;
+use MailPoet\Subscription\Captcha;
 
 class Renderer {
-  // public: rendering method
-  static function render($form = array()) {
-    $html = static::renderStyles($form);
-    $html .= static::renderHTML($form);
-    return $html;
+  /** @var Styles */
+  private $styleUtils;
+
+  /** @var SettingsController */
+  private $settings;
+
+  /** @var BlocksRenderer */
+  private $blocksRenderer;
+
+  public function __construct(
+    Styles $styleUtils,
+    SettingsController $settings,
+    BlocksRenderer $blocksRenderer
+  ) {
+    $this->styleUtils = $styleUtils;
+    $this->settings = $settings;
+    $this->blocksRenderer = $blocksRenderer;
   }
 
-  static function renderStyles($form = array(), $prefix = null) {
-    $styles = new Util\Styles(static::getStyles($form));
-
+  public function renderStyles(array $form = [], string $prefix = null): string {
     $html = '<style type="text/css">';
-    $html .= '.mailpoet_hp_email_label{display:none;}'; // move honeypot field out of sight
-    $html .= $styles->render($prefix);
+    $html .= '.mailpoet_hp_email_label{display:none!important;}'; // move honeypot field out of sight
+    $html .= $this->styleUtils->render($this->getStyles($form), $prefix);
     $html .= '</style>';
 
     return $html;
   }
 
-  static function renderHTML($form = array()) {
-    if(isset($form['body']) && !empty($form['body'])) {
-      return static::renderBlocks($form['body']);
+  public function renderHTML(array $form = []): string {
+    if (isset($form['body']) && !empty($form['body'])) {
+      return $this->renderBlocks($form['body'], $form['settings'] ?? []);
     }
     return '';
   }
 
-  static function getStyles($form = array()) {
-    if(isset($form['styles'])
+  public function getStyles(array $form = []): string {
+    if (isset($form['styles'])
     && strlen(trim($form['styles'])) > 0) {
       return strip_tags($form['styles']);
     } else {
-      return Util\Styles::$default_styles;
+      return $this->styleUtils->getDefaultStyles();
     }
   }
 
-  static function renderBlocks($blocks = array(), $honeypot_enabled = true) {
+  public function renderBlocks(array $blocks = [], array $formSettings = [], bool $honeypotEnabled = true): string {
     // add honeypot for spambots
-    $html = ($honeypot_enabled) ?
-      '<label class="mailpoet_hp_email_label">' . __('Please leave this field empty', 'mailpoet') . '<input type="email" name="data[email]"></label>' :
-      '';
-    foreach($blocks as $key => $block) {
-      if($block['type'] == 'submit' && Setting::getValue('re_captcha.enabled')) {
-        $site_key = Setting::getValue('re_captcha.site_token');
-        $html .= '<div class="mailpoet_recaptcha" data-sitekey="'. $site_key .'">
-          <div class="mailpoet_recaptcha_container"></div>
-          <noscript>
-            <div>
-              <div style="width: 302px; height: 422px; position: relative;">
-                <div style="width: 302px; height: 422px; position: absolute;">
-                  <iframe src="https://www.google.com/recaptcha/api/fallback?k='. $site_key .'" frameborder="0" scrolling="no" style="width: 302px; height:422px; border-style: none;">
-                  </iframe>
-                </div>
-              </div>
-              <div style="width: 300px; height: 60px; border-style: none; bottom: 12px; left: 25px; margin: 0px; padding: 0px; right: 25px; background: #f9f9f9; border: 1px solid #c1c1c1; border-radius: 3px;">
-                <textarea id="g-recaptcha-response" name="data[recaptcha]" class="g-recaptcha-response" style="width: 250px; height: 40px; border: 1px solid #c1c1c1; margin: 10px 25px; padding: 0px; resize: none;" >
-                </textarea>
-              </div>
-            </div>
-          </noscript>
-          <input class="mailpoet_recaptcha_field" type="hidden" name="recaptcha">
-        </div>';
+    $html = ($honeypotEnabled) ? $this->renderHoneypot() : '';
+    foreach ($blocks as $key => $block) {
+      if ($block['type'] == 'submit' && $this->settings->get('captcha.type') === Captcha::TYPE_RECAPTCHA) {
+        $html .= $this->renderReCaptcha();
       }
-      $html .= static::renderBlock($block) . PHP_EOL;
+      if (in_array($block['type'], ['column', 'columns'])) {
+        $blocks = $block['body'] ?? [];
+        $html .= $this->blocksRenderer->renderContainerBlock($block, $this->renderBlocks($blocks, $formSettings, false)) . PHP_EOL;
+      } else {
+        $html .= $this->blocksRenderer->renderBlock($block, $formSettings) . PHP_EOL;
+      }
     }
-    
     return $html;
   }
 
-  static function renderBlock($block = array()) {
-    $html = '';
-    switch($block['type']) {
-      case 'html':
-        $html .= Block\Html::render($block);
-        break;
+  private function renderHoneypot(): string {
+    return '<label class="mailpoet_hp_email_label">' . __('Please leave this field empty', 'mailpoet') . '<input type="email" name="data[email]"/></label>';
+  }
 
-      case 'divider':
-        $html .= Block\Divider::render();
-        break;
+  private function renderReCaptcha(): string {
+    $siteKey = $this->settings->get('captcha.recaptcha_site_token');
+    return '<div class="mailpoet_recaptcha" data-sitekey="' . $siteKey . '">
+      <div class="mailpoet_recaptcha_container"></div>
+      <noscript>
+        <div>
+          <div style="width: 302px; height: 422px; position: relative;">
+            <div style="width: 302px; height: 422px; position: absolute;">
+              <iframe src="https://www.google.com/recaptcha/api/fallback?k=' . $siteKey . '" frameborder="0" scrolling="no" style="width: 302px; height:422px; border-style: none;">
+              </iframe>
+            </div>
+          </div>
+          <div style="width: 300px; height: 60px; border-style: none; bottom: 12px; left: 25px; margin: 0px; padding: 0px; right: 25px; background: #f9f9f9; border: 1px solid #c1c1c1; border-radius: 3px;">
+            <textarea id="g-recaptcha-response" name="data[recaptcha]" class="g-recaptcha-response" style="width: 250px; height: 40px; border: 1px solid #c1c1c1; margin: 10px 25px; padding: 0px; resize: none;" >
+            </textarea>
+          </div>
+        </div>
+      </noscript>
+      <input class="mailpoet_recaptcha_field" type="hidden" name="recaptcha">
+    </div>';
+  }
 
-      case 'checkbox':
-        $html .= Block\Checkbox::render($block);
-        break;
+  public function renderFormElementStyles(array $form): string {
+    if (!isset($form['settings'])) return '';
+    $formSettings = $form['settings'];
+    $styles = [];
 
-      case 'radio':
-        $html .= Block\Radio::render($block);
-        break;
-
-      case 'segment':
-        $html .= Block\Segment::render($block);
-        break;
-
-      case 'date':
-        $html .= Block\Date::render($block);
-        break;
-
-      case 'select':
-        $html .= Block\Select::render($block);
-        break;
-
-      case 'text':
-        $html .= Block\Text::render($block);
-        break;
-
-      case 'textarea':
-        $html .= Block\Textarea::render($block);
-        break;
-
-      case 'submit':
-        $html .= Block\Submit::render($block);
-        break;
+    if (isset($formSettings['backgroundColor'])) {
+      $styles[] = 'background-color: ' . trim($formSettings['backgroundColor']);
     }
-    return $html;
+
+    if (isset($formSettings['fontColor'])) {
+      $styles[] = 'color: ' . trim($formSettings['fontColor']);
+    }
+
+    if (isset($formSettings['border_size']) && isset($formSettings['border_color'])) {
+      $styles[] = 'border: ' . $formSettings['border_size'] . 'px solid ' . $formSettings['border_color'];
+    }
+
+    if (isset($formSettings['border_radius'])) {
+      $styles[] = 'border-radius: ' . $formSettings['border_radius'] . 'px';
+    }
+
+    if (isset($formSettings['form_padding'])) {
+      $styles[] = 'padding: ' . $formSettings['form_padding'] . 'px';
+    }
+
+    if (isset($formSettings['alignment'])) {
+      $styles[] = 'text-align: ' . $formSettings['alignment'];
+    }
+
+    return join(';', $styles);
   }
 }

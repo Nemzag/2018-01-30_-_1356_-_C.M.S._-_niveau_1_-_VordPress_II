@@ -1,137 +1,163 @@
 <?php
+
 namespace MailPoet\Subscribers\ImportExport;
+
+if (!defined('ABSPATH')) exit;
+
 
 use MailPoet\Models\CustomField;
 use MailPoet\Models\Segment;
 use MailPoet\Util\Helpers;
+use MailPoet\WP\Functions as WPFunctions;
 
 class ImportExportFactory {
+  const IMPORT_ACTION = 'import';
+  const EXPORT_ACTION = 'export';
+
   public $action;
 
-  function __construct($action = null) {
+  private $wp;
+
+  public function __construct($action = null) {
     $this->action = $action;
+    $this->wp = new WPFunctions;
   }
 
-  function getSegments($with_confirmed_subscribers = false) {
-    $segments = ($this->action === 'import') ?
-      Segment::getSegmentsForImport() :
-      Segment::getSegmentsForExport($with_confirmed_subscribers);
+  public function getSegments() {
+    if ($this->action === self::IMPORT_ACTION) {
+      $segments = Segment::getSegmentsForImport();
+    } else {
+      $segments = Segment::getSegmentsForExport();
+      $segments = $this->wp->applyFilters('mailpoet_segments_with_subscriber_count', $segments);
+      $segments = array_values(array_filter($segments, function($segment) {
+        return $segment['subscribers'] > 0;
+      }));
+    }
+
     return array_map(function($segment) {
-      if(!$segment['name']) $segment['name'] = __('Not In List', 'mailpoet');
-      if(!$segment['id']) $segment['id'] = 0;
-      return array(
+      if (!$segment['name']) $segment['name'] = WPFunctions::get()->__('Not In List', 'mailpoet');
+      if (!$segment['id']) $segment['id'] = 0;
+      return [
         'id' => $segment['id'],
         'name' => $segment['name'],
-        'subscriberCount' => $segment['subscribers']
-      );
+        'text' => $segment['name'], // Required select2 property
+        'subscriberCount' => $segment['subscribers'],
+      ];
     }, $segments);
   }
 
-  function getSubscriberFields() {
-    return array(
-      'email' => __('Email', 'mailpoet'),
-      'first_name' => __('First name', 'mailpoet'),
-      'last_name' => __('Last name', 'mailpoet'),
-      'status' => __('Status', 'mailpoet')
-      // TODO: add additional fields from MP2
-    );
-  }
-
-  function formatSubscriberFields($subscriber_fields) {
-    return array_map(function($field_id, $field_name) {
-      return array(
-        'id' => $field_id,
-        'name' => $field_name,
-        'type' => ($field_id === 'confirmed_at') ? 'date' : null,
-        'custom' => false
+  public function getSubscriberFields() {
+    $fields = [
+      'email' => WPFunctions::get()->__('Email', 'mailpoet'),
+      'first_name' => WPFunctions::get()->__('First name', 'mailpoet'),
+      'last_name' => WPFunctions::get()->__('Last name', 'mailpoet'),
+    ];
+    if ($this->action === 'export') {
+      $fields = array_merge(
+        $fields,
+        [
+          'list_status' => WPFunctions::get()->_x('List status', 'Subscription status', 'mailpoet'),
+          'global_status' => WPFunctions::get()->_x('Global status', 'Subscription status', 'mailpoet'),
+          'subscribed_ip' => WPFunctions::get()->__('IP address', 'mailpoet'),
+        ]
       );
-    }, array_keys($subscriber_fields), $subscriber_fields);
+    }
+    return $fields;
   }
 
-  function getSubscriberCustomFields() {
+  public function formatSubscriberFields($subscriberFields) {
+    return array_map(function($fieldId, $fieldName) {
+      return [
+        'id' => $fieldId,
+        'name' => $fieldName,
+        'type' => ($fieldId === 'confirmed_at') ? 'date' : null,
+        'custom' => false,
+      ];
+    }, array_keys($subscriberFields), $subscriberFields);
+  }
+
+  public function getSubscriberCustomFields() {
     return CustomField::findArray();
   }
 
-  function formatSubscriberCustomFields($subscriber_custom_fields) {
+  public function formatSubscriberCustomFields($subscriberCustomFields) {
     return array_map(function($field) {
-      return array(
+      return [
         'id' => $field['id'],
         'name' => $field['name'],
         'type' => $field['type'],
         'params' => unserialize($field['params']),
-        'custom' => true
-      );
-    }, $subscriber_custom_fields);
+        'custom' => true,
+      ];
+    }, $subscriberCustomFields);
   }
 
-  function formatFieldsForSelect2(
-    $subscriber_fields,
-    $subscriber_custom_fields) {
+  public function formatFieldsForSelect2(
+    $subscriberFields,
+    $subscriberCustomFields) {
     $actions = ($this->action === 'import') ?
-      array(
-        array(
+      [
+        [
           'id' => 'ignore',
-          'name' => __('Ignore field...', 'mailpoet'),
-        ),
-        array(
+          'name' => WPFunctions::get()->__('Ignore field...', 'mailpoet'),
+        ],
+        [
           'id' => 'create',
-          'name' => __('Create new field...', 'mailpoet')
-        ),
-      ) :
-      array(
-        array(
+          'name' => WPFunctions::get()->__('Create new field...', 'mailpoet'),
+        ],
+      ] :
+      [
+        [
           'id' => 'select',
-          'name' => __('Select all...', 'mailpoet'),
-        ),
-        array(
+          'name' => WPFunctions::get()->__('Select all...', 'mailpoet'),
+        ],
+        [
           'id' => 'deselect',
-          'name' => __('Deselect all...', 'mailpoet')
-        ),
-      );
-    $select2Fields = array(
-      array(
-        'name' => __('Actions', 'mailpoet'),
-        'children' => $actions
-      ),
-      array(
-        'name' => __('System fields', 'mailpoet'),
-        'children' => $this->formatSubscriberFields($subscriber_fields)
-      )
-    );
-    if($subscriber_custom_fields) {
-      array_push($select2Fields, array(
-        'name' => __('User fields', 'mailpoet'),
+          'name' => WPFunctions::get()->__('Deselect all...', 'mailpoet'),
+        ],
+      ];
+    $select2Fields = [
+      [
+        'name' => WPFunctions::get()->__('Actions', 'mailpoet'),
+        'children' => $actions,
+      ],
+      [
+        'name' => WPFunctions::get()->__('System fields', 'mailpoet'),
+        'children' => $this->formatSubscriberFields($subscriberFields),
+      ],
+    ];
+    if ($subscriberCustomFields) {
+      array_push($select2Fields, [
+        'name' => WPFunctions::get()->__('User fields', 'mailpoet'),
         'children' => $this->formatSubscriberCustomFields(
-          $subscriber_custom_fields
-        )
-      ));
+          $subscriberCustomFields
+        ),
+      ]);
     }
     return $select2Fields;
   }
 
-  function bootstrap() {
-    $subscriber_fields = $this->getSubscriberFields();
-    $subscriber_custom_fields = $this->getSubscriberCustomFields();
+  public function bootstrap() {
+    $subscriberFields = $this->getSubscriberFields();
+    $subscriberCustomFields = $this->getSubscriberCustomFields();
     $data['segments'] = json_encode($this->getSegments());
     $data['subscriberFieldsSelect2'] = json_encode(
       $this->formatFieldsForSelect2(
-        $subscriber_fields,
-        $subscriber_custom_fields
+        $subscriberFields,
+        $subscriberCustomFields
       )
     );
-    if($this->action === 'import') {
+    if ($this->action === 'import') {
       $data['subscriberFields'] = json_encode(
         array_merge(
-          $this->formatSubscriberFields($subscriber_fields),
-          $this->formatSubscriberCustomFields($subscriber_custom_fields)
+          $this->formatSubscriberFields($subscriberFields),
+          $this->formatSubscriberCustomFields($subscriberCustomFields)
         )
       );
       $data['maxPostSizeBytes'] = Helpers::getMaxPostSize('bytes');
       $data['maxPostSize'] = Helpers::getMaxPostSize();
-    } else {
-      $data['segmentsWithConfirmedSubscribers'] =
-        json_encode($this->getSegments($with_confirmed_subscribers = true));
     }
+    $data['zipExtensionLoaded'] = extension_loaded('zip');
     return $data;
   }
 }

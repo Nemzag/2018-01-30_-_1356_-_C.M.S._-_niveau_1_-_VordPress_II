@@ -26,9 +26,10 @@ if( !$is_open && !is_user_logged_in() && $EM_Event->get_bookings()->is_open(true
 }
 ?>
 <div id="em-booking" class="em-booking <?php if( get_option('dbem_css_rsvp') ) echo 'css-booking'; ?>">
-	<?php 
+	<?php
 		// We are firstly checking if the user has already booked a ticket at this event, if so offer a link to view their bookings.
 		$EM_Booking = $EM_Event->get_bookings()->has_booking();
+		do_action('em_booking_form_top');
 	?>
 	<?php if( is_object($EM_Booking) && !get_option('dbem_bookings_double') ): //Double bookings not allowed ?>
 		<p>
@@ -46,6 +47,7 @@ if( !$is_open && !is_user_logged_in() && $EM_Event->get_bookings()->is_open(true
 		<?php if( $tickets_count > 0) : ?>
 			<?php //Tickets exist, so we show a booking form. ?>
 			<form class="em-booking-form" name='booking-form' method='post' action='<?php echo apply_filters('em_booking_form_action_url',''); ?>#em-booking'>
+				<?php do_action('em_booking_form_header'); ?>
 			 	<input type='hidden' name='action' value='booking_add'/>
 			 	<input type='hidden' name='event_id' value='<?php echo $EM_Event->get_bookings()->event_id; ?>'/>
 			 	<input type='hidden' name='_wpnonce' value='<?php echo wp_create_nonce('booking_add'); ?>'/>
@@ -87,7 +89,7 @@ if( !$is_open && !is_user_logged_in() && $EM_Event->get_bookings()->is_open(true
 							<?php if( preg_match('/https?:\/\//',get_option('dbem_bookings_submit_button')) ): //Settings have an image url (we assume). Use it here as the button.?>
 							<input type="image" src="<?php echo get_option('dbem_bookings_submit_button'); ?>" class="em-booking-submit" id="em-booking-submit" />
 							<?php else: //Display normal submit button ?>
-							<input type="submit" class="em-booking-submit" id="em-booking-submit" value="<?php echo esc_attr(get_option('dbem_bookings_submit_button')); ?>" />
+							<input type="submit" class="<?php if(is_admin()) echo 'button-primary '; ?>em-booking-submit" id="em-booking-submit" value="<?php echo esc_attr(get_option('dbem_bookings_submit_button')); ?>" />
 							<?php endif; ?>
 						</div>
 						<?php do_action('em_booking_form_footer_after_buttons', $EM_Event); //do not delete ?>
@@ -105,4 +107,5 @@ if( !$is_open && !is_user_logged_in() && $EM_Event->get_bookings()->is_open(true
 			<br class="clear" style="clear:left;" />  
 		<?php endif; ?>
 	<?php endif; ?>
+	<?php do_action('em_booking_form_bottom'); ?>
 </div>

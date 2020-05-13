@@ -22,7 +22,7 @@ function em_content($page_content) {
 	//general defaults
 	$args = array(				
 		'owner' => false,
-		'pagination' => 1
+		'pagination' => 1,
 	);
 	$args['ajax'] = isset($args['ajax']) ? $args['ajax']:(!defined('EM_AJAX') || EM_AJAX );
 	if( !post_password_required() && in_array($post->ID, array($events_page_id, $locations_page_id, $categories_page_id, $edit_bookings_page_id, $edit_events_page_id, $edit_locations_page_id, $my_bookings_page_id, $tags_page_id)) ){
@@ -34,6 +34,7 @@ function em_content($page_content) {
 				if ( !empty($_REQUEST['calendar_day']) ) {
 					//Events for a specific day
 					$args = EM_Events::get_post_search( array_merge($args, $_REQUEST) );
+					$args['limit'] = !empty($args['limit']) ? $args['limit'] : get_option('dbem_events_default_limit');
 					em_locate_template('templates/calendar-day.php',true, array('args'=>$args));
 				}elseif ( is_object($EM_Event)) {
 					em_locate_template('templates/event-single.php',true, array('args'=>$args));	
@@ -119,7 +120,7 @@ function em_content($page_content) {
 				$content = str_replace('CONTENTS',$content,$page_content);
 			}
 			if(get_option('dbem_credits')){
-				$content .= '<p style="color:#999; font-size:11px;">Powered by <a href="http://wp-events-plugin.com" style="color:#999;" target="_blank">Events Manager</a></p>';
+				$content .= '<p style="color:#999; font-size:11px;">Powered by <a href="https://wp-events-plugin.com" style="color:#999;" target="_blank">Events Manager</a></p>';
 			}
 		}
 		return apply_filters('em_content', '<div id="em-wrapper">'.$content.'</div>');
@@ -130,6 +131,7 @@ function em_content($page_content) {
 function em_add_content_filter_after_head(){
 	add_filter('the_content', 'em_content');
 }
+//remember that this gets removed by taxonomy pages showing a single taxonomy page, so careful if changing the priority
 add_action('wp_head', 'em_add_content_filter_after_head', 1000);
 
 /**
@@ -202,8 +204,8 @@ function em_content_page_title($original_content, $id = null) {
 					$content = $EM_Event->name .' - '. $original_content;
 				}
 			}
-			return apply_filters('em_content_page_title', $content);
 		}
+		return apply_filters('em_content_page_title', $content);
 	}
 	return $original_content;
 }

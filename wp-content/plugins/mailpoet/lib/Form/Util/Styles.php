@@ -1,19 +1,32 @@
 <?php
+
 namespace MailPoet\Form\Util;
 
-use Sabberworm\CSS\Parser as CSSParser;
+if (!defined('ABSPATH')) exit;
+
+
+use MailPoetVendor\Sabberworm\CSS\Parser as CSSParser;
 
 class Styles {
-  public $styles;
-  static $default_styles = <<<EOL
+  private $defaultStyles = <<<EOL
 /* form */
 .mailpoet_form {
-
+  padding: 10px;
 }
 
-/* paragraphs (label + input) */
+/* columns */
+.mailpoet_column_with_background {
+  padding: 10px;
+}
+/* space between columns */
+.mailpoet_form_column:not(:first-child) {
+  margin-left: 20px;
+}
+
+/* input wrapper (label + input) */
 .mailpoet_paragraph {
   line-height:20px;
+  margin-bottom: 20px;
 }
 
 /* labels */
@@ -26,7 +39,7 @@ class Styles {
 .mailpoet_list_label,
 .mailpoet_date_label {
   display:block;
-  font-weight:bold;
+  font-weight: normal;
 }
 
 /* inputs */
@@ -42,13 +55,13 @@ class Styles {
 
 .mailpoet_text,
 .mailpoet_textarea {
-  width:200px;
+  width: 200px;
 }
 
 .mailpoet_checkbox {
 }
 
-.mailpoet_submit input {
+.mailpoet_submit {
 }
 
 .mailpoet_divider {
@@ -58,34 +71,47 @@ class Styles {
 }
 
 .mailpoet_validate_success {
+  font-weight: 600;
   color:#468847;
 }
 
 .mailpoet_validate_error {
   color:#B94A48;
 }
+
+.mailpoet_form_loading {
+  width: 30px;
+  text-align: center;
+  line-height: normal;
+}
+
+.mailpoet_form_loading > span {
+  width: 5px;
+  height: 5px;
+  background-color: #5b5b5b;
+}
 EOL;
 
-  function __construct($stylesheet = null) {
-    $this->stylesheet = $stylesheet;
+  public function getDefaultStyles() {
+    return $this->defaultStyles;
   }
 
-  function render($prefix = '') {
-    if(!$this->stylesheet) return;
-    $styles = new CSSParser($this->stylesheet);
+  public function render($stylesheet, $prefix = '') {
+    if (!$stylesheet) return;
+    $styles = new CSSParser($stylesheet);
     $styles = $styles->parse();
-    $formatted_styles = array();
-    foreach($styles->getAllDeclarationBlocks() as $style_declaration) {
+    $formattedStyles = [];
+    foreach ($styles->getAllDeclarationBlocks() as $styleDeclaration) {
       $selectors = array_map(function($selector) use ($prefix) {
         return sprintf('%s %s', $prefix, $selector->__toString());
-      }, $style_declaration->getSelectors());
+      }, $styleDeclaration->getSelectors());
       $selectors = implode(', ', $selectors);
       $rules = array_map(function($rule) {
         return $rule->__toString();
-      }, $style_declaration->getRules());
+      }, $styleDeclaration->getRules());
       $rules = sprintf('{ %s }', implode(' ', $rules));
-      $formatted_styles[] = sprintf('%s %s', $selectors, $rules);
+      $formattedStyles[] = sprintf('%s %s', $selectors, $rules);
     }
-    return implode(PHP_EOL, $formatted_styles);
+    return implode(PHP_EOL, $formattedStyles);
   }
 }

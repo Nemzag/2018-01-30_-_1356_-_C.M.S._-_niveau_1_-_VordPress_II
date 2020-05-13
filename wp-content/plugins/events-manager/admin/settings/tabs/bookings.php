@@ -70,7 +70,7 @@
 			em_options_input_text ( __( 'Maximum spaces per booking', 'events-manager'), 'dbem_booking_feedback_spaces_limit', __( 'If the user tries to make a booking with spaces that exceeds the maximum number of spaces per booking.', 'events-manager').' '. __('%d will be replaced by a number.','events-manager') );
 			?>
 			<tr class="em-header"><td colspan='2'><h4><?php _e('Booking button feedback messages','events-manager') ?></h4></td></tr>
-			<tr><td colspan='2'><?php echo sprintf(__('When the %s placeholder, the below texts will be used.','events-manager'),'<code>#_BOOKINGBUTTON</code>'); ?></td></tr>
+			<tr><td colspan='2'><?php echo sprintf(__('With the %s placeholder, the below texts will be used.','events-manager'),'<code>#_BOOKINGBUTTON</code>'); ?></td></tr>
 			<?php			
 			em_options_input_text ( __( 'User can book', 'events-manager'), 'dbem_booking_button_msg_book', '');
 			em_options_input_text ( __( 'Booking in progress', 'events-manager'), 'dbem_booking_button_msg_booking', '');
@@ -102,7 +102,7 @@
 			?>
 		</table>
 	</div> <!-- . inside -->
-	</div> <!-- .postbox --> 
+	</div> <!-- .postbox -->
 	
 	<div  class="postbox " id="em-opt-ticket-options" >
 	<div class="handlediv" title="<?php __('Click to toggle', 'events-manager'); ?>"><br /></div><h3><span><?php echo sprintf(__( '%s Options', 'events-manager'),__('Ticket','events-manager')); ?> </span></h3>
@@ -115,12 +115,13 @@
 			em_options_radio_binary ( __( 'Show member-only tickets?', 'events-manager'), 'dbem_bookings_tickets_show_member_tickets', sprintf(__('%s must be set to yes for this to work.', 'events-manager'), '<strong>'.__( 'Show unavailable tickets?', 'events-manager').'</strong>').' '.__( 'If there are member-only tickets, you can choose whether or not to show these tickets to guests.','events-manager') );
 			
 			em_options_radio_binary ( __( 'Show multiple tickets if logged out?', 'events-manager'), 'dbem_bookings_tickets_show_loggedout', __( 'If guests cannot make bookings, they will be asked to register in order to book. However, enabling this will still show available tickets.', 'events-manager') );
-			$ticket_orders = array(
+			em_options_radio_binary ( __( 'Enable custom ticket ordering?', 'events-manager'), 'dbem_bookings_tickets_ordering', __( 'When enabled, users can custom-order their tickets using drag and drop. If enabled, saved ordering supercedes the default ticket ordering below.', 'events-manager') );
+			$ticket_orders = apply_filters('em_tickets_orderby_options', array(
 				'ticket_price DESC, ticket_name ASC'=>__('Ticket Price (Descending)','events-manager'),
 				'ticket_price ASC, ticket_name ASC'=>__('Ticket Price (Ascending)','events-manager'),
 				'ticket_name ASC, ticket_price DESC'=>__('Ticket Name (Ascending)','events-manager'),
 				'ticket_name DESC, ticket_price DESC'=>__('Ticket Name (Descending)','events-manager')
-			);
+			));
 			em_options_select ( __( 'Order Tickets By', 'events-manager'), 'dbem_bookings_tickets_orderby', $ticket_orders, __( 'Choose which order your tickets appear.', 'events-manager') );
 			echo $save_button; 
 			?>

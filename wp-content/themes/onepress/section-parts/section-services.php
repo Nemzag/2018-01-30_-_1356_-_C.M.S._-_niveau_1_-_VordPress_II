@@ -5,10 +5,11 @@ $title    = get_theme_mod( 'onepress_services_title', esc_html__('Our Services',
 $subtitle = get_theme_mod( 'onepress_services_subtitle', esc_html__('Section subtitle', 'onepress' ));
 // Get data
 $page_ids =  onepress_get_section_services_data();
+$content_source = get_theme_mod( 'onepress_service_content_source', 'excerpt' );
 if ( onepress_is_selective_refresh() ) {
     $disable = false;
 }
-if ( ! empty( $page_ids ) ) {
+
     $layout = intval( get_theme_mod( 'onepress_service_layout', 6 ) );
     $desc = get_theme_mod( 'onepress_services_desc' );
     ?>
@@ -105,7 +106,7 @@ if ( ! empty( $page_ids ) ) {
                                     } ?>
                                     <div class="service-content">
                                         <h4 class="service-title"><?php echo get_the_title( $post ); ?></h4>
-                                        <?php the_excerpt(); ?>
+                                        <?php if( $content_source == 'content' ) the_content(); else the_excerpt() ?>
                                     </div>
                                 </div>
                             </div>
@@ -122,4 +123,3 @@ if ( ! empty( $page_ids ) ) {
         </section>
         <?php } ?>
     <?php endif;
-}
