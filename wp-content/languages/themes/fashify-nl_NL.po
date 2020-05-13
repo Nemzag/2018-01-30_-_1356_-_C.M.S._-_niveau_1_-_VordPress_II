@@ -1,0 +1,331 @@
+# Translation of Themes - Fashify in Dutch
+# This file is distributed under the same license as the Themes - Fashify package.
+msgid ""
+msgstr ""
+"PO-Revision-Date: 2017-09-23 12:18:32+0000\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=n != 1;\n"
+"X-Generator: GlotPress/2.4.0-alpha\n"
+"Language: nl\n"
+"Project-Id-Version: Themes - Fashify\n"
+
+#. Theme Name of the plugin/theme
+msgid "Fashify"
+msgstr "Fashify"
+
+#. Description of the plugin/theme
+msgid "A fashionable WordPress blog theme."
+msgstr "Een modebewust WordPress blogthema."
+
+#: inc/customizer.php:51
+msgid "Site Layout"
+msgstr "Site-layout"
+
+#: inc/customizer.php:28
+msgid "Theme Options"
+msgstr "Thema opties"
+
+#: inc/customizer.php:148
+msgid "Primary Color"
+msgstr "Hoofdkleur"
+
+#: 404.php:19
+msgid "Oops! That page can&rsquo;t be found."
+msgstr "Oeps. Deze pagina kon niet worden gevonden."
+
+#: 404.php:23
+msgid "It looks like nothing was found at this location. Maybe try one of the links below or a search?"
+msgstr "Het lijkt erop dat er niets is gevonden op deze locatie. Probeer het eens met de links hieronder of door te zoeken."
+
+#: comments.php:92
+msgid "Comments are closed."
+msgstr "Reacties zijn gesloten."
+
+#: footer.php:42
+msgid "Copyright &copy; %1$s %2$s. All Rights Reserved."
+msgstr "Auteursrecht &copy; %1$s %2$s. Alle rechten voorbehouden."
+
+#: functions.php:61
+msgid "Primary"
+msgstr "Primair"
+
+#: functions.php:127 functions.php:137
+msgid "Add widgets here."
+msgstr "Voeg widgets hier toe."
+
+#: header.php:25
+msgid "Skip to content"
+msgstr "Naar de inhoud springen"
+
+#: header.php:67
+msgid "Menu"
+msgstr "Menu"
+
+#: inc/template-tags.php:37 inc/template-tags.php:74 inc/template-tags.php:90
+msgid ", "
+msgstr ", "
+
+#. translators: %s: Name of current post
+#: template-parts/content-page.php:33
+msgid "Edit %s"
+msgstr "%s bewerken"
+
+#: search.php:24
+msgid "Search Results for: %s"
+msgstr "Zoekresultaten voor: %s"
+
+#: template-parts/content-none.php:14
+msgid "Nothing Found"
+msgstr "Niets gevonden"
+
+#: template-parts/content-none.php:21
+msgid "Ready to publish your first post? <a href=\"%1$s\">Get started here</a>."
+msgstr "Klaar om je eerste bericht te publiceren? <a href=\"%1$s\">Start hier</a>."
+
+#: template-parts/content-none.php:25
+msgid "Sorry, but nothing matched your search terms. Please try again with some different keywords."
+msgstr "Helaas, er waren geen overeenkomsten met je zoekterm. Probeer het opnieuw met enkele andere zoekwoorden."
+
+#: template-parts/content-page.php:22 template-parts/content-single.php:30
+msgid "Pages:"
+msgstr "Pagina&#39;s:"
+
+#: template-parts/content-single.php:41
+msgid "Continue Reading"
+msgstr "Verder lezen"
+
+#: archive.php:68 home.php:99 search.php:66
+msgid "Page"
+msgstr "Pagina"
+
+#: comments.php:53 comments.php:75
+msgid "Comment navigation"
+msgstr "Reactienavigatie"
+
+#: comments.php:56 comments.php:78
+msgid "Older Comments"
+msgstr "Oudere reacties"
+
+#: comments.php:57 comments.php:79
+msgid "Newer Comments"
+msgstr "Nieuwere reacties"
+
+#: functions.php:135
+msgid "Footer"
+msgstr "Footer"
+
+#: inc/customizer.php:159
+msgid "Secondary Color"
+msgstr "Secondaire kleur"
+
+#: inc/extras.php:75
+msgid "Search for:"
+msgstr "Zoeken naar:"
+
+#: inc/extras.php:76
+msgid "Search"
+msgstr "Zoeken"
+
+#: inc/template-tags.php:160
+msgid "Pingback:"
+msgstr "Pingback:"
+
+#: inc/template-tags.php:160
+msgid "Edit"
+msgstr "Bewerken"
+
+#: inc/template-tags.php:174
+msgid "Your comment is awaiting moderation."
+msgstr "Je reactie is in afwachting van moderatie."
+
+#. translators: 1: date, 2: time
+#: inc/template-tags.php:183
+msgid "%1$s at %2$s"
+msgstr "%1$s om %2$s"
+
+#: inc/widgets.php:71
+msgid "Recent Posts"
+msgstr "Meest recente berichten"
+
+#: inc/widgets.php:82 inc/widgets.php:95
+msgid "Title"
+msgstr "Titel"
+
+#: inc/widgets.php:87
+msgid "Number of photos"
+msgstr "Aantal foto's"
+
+#: inc/widgets.php:92
+msgid "Order by"
+msgstr "Sorteer op"
+
+#: inc/widgets.php:94
+msgid "Date"
+msgstr "Datum"
+
+#: inc/widgets.php:96
+msgid "Comment count"
+msgstr "Aantal reacties"
+
+#: inc/widgets.php:97
+msgid "Random"
+msgstr "Willekeurig"
+
+#: inc/widgets.php:100
+msgid "Order"
+msgstr "Volgorde"
+
+#: inc/widgets.php:102
+msgid "DESC"
+msgstr "DESC"
+
+#: inc/widgets.php:103
+msgid "ASC"
+msgstr "ASC"
+
+#: template-parts/content-single.php:38
+msgid "Previous article"
+msgstr "Vorige artikel"
+
+#: template-parts/content-single.php:39
+msgid "Next article"
+msgstr "Volgende artikel"
+
+#. Template Name of the plugin/theme
+msgid "Full Width Page"
+msgstr "Volledige-breedte pagina"
+
+#: inc/customizer.php:55
+msgid "Left Sidebar"
+msgstr "Sidebar links"
+
+#: inc/customizer.php:56
+msgid "Right Sidebar"
+msgstr "Sidebar rechts"
+
+#: inc/widgets.php:13
+msgid "Displays custom posts."
+msgstr "Toont custom posts."
+
+#. translators: %s: post title
+#: comments.php:33
+msgctxt "comments title"
+msgid "One thought on &ldquo;%s&rdquo;"
+msgstr "Eén gedachte over &ldquo;%s&rdquo;"
+
+#. translators: 1: number of comments, 2: post title
+#: comments.php:37
+msgctxt "comments title"
+msgid "%1$s thought on &ldquo;%2$s&rdquo;"
+msgid_plural "%1$s thoughts on &ldquo;%2$s&rdquo;"
+msgstr[0] "%1$s gedachte over &ldquo;%2$s&rdquo;"
+msgstr[1] "%1$s gedachten over &ldquo;%2$s&rdquo;"
+
+#: inc/customizer.php:75
+msgid "Grid"
+msgstr "Raster"
+
+#: inc/customizer.php:76
+msgid "List"
+msgstr "Lijst"
+
+#: inc/customizer.php:74
+msgid "Default"
+msgstr "Standaard"
+
+#: inc/template-tags.php:96
+msgid "Posted in"
+msgstr "Geplaatst in"
+
+#: footer.php:42
+msgid "Y"
+msgstr "Y"
+
+#: inc/customizer.php:37
+msgid "Global"
+msgstr "Globaal"
+
+#: template-parts/content-none.php:31
+msgid "It seems we can&rsquo;t find what you&rsquo;re looking for. Perhaps searching can help."
+msgstr "Het lijkt erop dat we niet kunnen vinden waar je naar zoekt. Misschien kun je er naar zoeken."
+
+#: inc/template-tags.php:38 inc/template-tags.php:75
+msgid " in %1$s"
+msgstr " in %1$s"
+
+#: inc/template-tags.php:28 inc/template-tags.php:65
+msgctxt "post date"
+msgid " on %s"
+msgstr " op %s"
+
+#: inc/template-tags.php:33 inc/template-tags.php:70
+msgctxt "post author"
+msgid "Posted by %s"
+msgstr "Geplaatst door %s"
+
+#: inc/widgets.php:10
+msgid "Fashify Posts"
+msgstr "Fashify berichten"
+
+#: inc/template-tags.php:239
+msgid "Fashify Theme by %1$s"
+msgstr "Fashify thema door %1$s"
+
+#: inc/template-tags.php:179
+msgid "says:"
+msgstr "zegt:"
+
+#: inc/template-tags.php:102
+msgid "Tagged in"
+msgstr "Getagd in"
+
+#: functions.php:104
+msgctxt "libre_franklin font: on or off"
+msgid "on"
+msgstr "on"
+
+#: functions.php:62
+msgid "Social Links"
+msgstr "Sociale links"
+
+#: inc/customizer.php:70
+msgid "Archive/Search Layout:"
+msgstr "Layout Archief/Zoeken:"
+
+#: inc/customizer.php:87 template-parts/content-staff.php:14
+msgid "Staff Picks"
+msgstr "Uitgekozen voor jou"
+
+#: inc/customizer.php:102
+msgid "Show/Hide the staff pick"
+msgstr "Toon/verberg de uitgekozen"
+
+#: inc/customizer.php:117
+msgid "Staff Category:"
+msgstr "Uitgekozen categorie:"
+
+#: inc/customizer.php:133
+msgid "Number:"
+msgstr "Aantal:"
+
+#: inc/customizer.php:136
+msgid "Enter number post display on Staff section."
+msgstr "Voer aantal berichtenweergave in voor uitgekozen sectie."
+
+#: functions.php:125
+msgid "Sidebar"
+msgstr "Sidebar"
+
+#. Author of the plugin/theme
+msgid "FameThemes"
+msgstr "FameThemes"
+
+#. Author URI of the plugin/theme
+msgid "https://www.famethemes.com"
+msgstr "https://www.famethemes.com"
+
+#. Theme URI of the plugin/theme
+msgid "https://www.famethemes.com/themes/fashify/"
+msgstr "https://www.famethemes.com/themes/fashify/"
